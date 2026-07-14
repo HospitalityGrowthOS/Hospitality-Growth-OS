@@ -55,5 +55,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/stripe/webhook|api/signup|api/feedback|api/review-requests|api/loyalty/member|api/whatsapp/status|signup|loyalty|feedback|pricing|checkout|auth/callback).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/stripe/webhook|api/signup|api/feedback|api/review-requests|api/loyalty/member|api/whatsapp/status|signup|loyalty|feedback|pricing|checkout|auth/callback|auth/confirm).*)'],
 }
