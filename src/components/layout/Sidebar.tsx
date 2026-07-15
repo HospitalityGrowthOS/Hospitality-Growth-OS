@@ -54,6 +54,7 @@ export default function Sidebar({ userName, userInitials, userEmail, venueName, 
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
+    router.refresh()
   }
 
   const isActive = (href: string, exact = false) =>
@@ -121,12 +122,23 @@ export default function Sidebar({ userName, userInitials, userEmail, venueName, 
 
       {/* User */}
       <div className="p-3 border-t border-white/[0.08]">
-        <div className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-white/[0.04] cursor-pointer transition-colors group" onClick={handleSignOut} title="Sign out">
+        <div className="flex items-center gap-2.5 p-2">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal to-[#0f5c76] flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{userInitials}</div>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-medium text-paper truncate">{userName}</div>
-            <div className="text-[10px] text-mid group-hover:text-ember/80 transition-colors">Sign out</div>
+            {userEmail && <div className="text-[10px] text-mid truncate">{userEmail}</div>}
           </div>
+          <button
+            onClick={handleSignOut}
+            title="Sign out"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-mid hover:text-ember hover:bg-white/[0.06] transition-colors flex-shrink-0"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16,17 21,12 16,7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
         </div>
       </div>
     </aside>
