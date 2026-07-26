@@ -1,94 +1,99 @@
 /**
- * Review Automation Engine
- * Triggered by cron every 5 minutes.
- * Finds pending review_requests where visit was 45+ minutes ago,
- * sends WhatsApp message, routes positive/negative.
+ * Review automation dispatcher.
+ *
+ * Polled every 5 minutes by pg_cron (see supabase/review_automation.sql).
+ * Sends the approved `review_request` template for every pending request whose
+ * 45-minute delay has elapsed.
+ *
+ * Business-initiated messages must use an approved template — a free-form or
+ * interactive message would be rejected, since the guest has not messaged us
+ * within the last 24 hours.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
-import { sendInteractive } from '@/lib/whatsapp'
+import { sendReviewRequest } from '@/lib/whatsapp-send'
+
+const BATCH_LIMIT = 50
+
+function authorized(req: NextRequest) {
+  return req.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`
+}
 
 export async function POST(req: NextRequest) {
-  // Secure cron endpoint
-  const auth = req.headers.get('authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!authorized(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const supabase = await createAdminClient()
-  const cutoff = new Date(Date.now() - 45 * 60 * 1000).toISOString() // 45 min ago
+  const now = new Date().toISOString()
 
-  // Find pending requests where the visit was 45+ min ago and guest opted in
   const { data: requests, error } = await supabase
     .from('review_requests')
     .select(`
-      id, venue_id, guest_id, visit_id,
-      guests(name, phone, whatsapp_opted_in),
-      venues(name, whatsapp_phone_number_id, whatsapp_access_token, settings),
-      visits(visited_at)
+      id, venue_id, guest_id, guest_name, guest_phone,
+      guests ( name, phone, whatsapp_opted_in ),
+      venues ( name )
     `)
     .eq('status', 'pending')
-    .eq('channel', 'whatsapp')
-    .lt('visits.visited_at', cutoff)
-    .limit(50)
+    .lte('scheduled_for', now)
+    .limit(BATCH_LIMIT)
 
-  if (error) { console.error('review-request query error:', error); return NextResponse.json({ error: error.message }, { status: 500 }) }
-  if (!requests?.length) return NextResponse.json({ sent: 0 })
+  if (error) {
+    console.error('[review-dispatch] query error:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  if (!requests?.length) return NextResponse.json({ sent: 0, skipped: 0 })
 
   let sent = 0
-  const results: string[] = []
+  let skipped = 0
+  let failed = 0
 
   for (const request of requests) {
-    const guest = request.guests as { name?: string; phone?: string; whatsapp_opted_in?: boolean }
-    const venue = request.venues as { name: string; whatsapp_phone_number_id?: string; whatsapp_access_token?: string; settings?: Record<string, unknown> }
+    const guest = request.guests as { name?: string; phone?: string; whatsapp_opted_in?: boolean } | null
+    const venue = request.venues as { name?: string } | null
 
-    if (!guest?.whatsapp_opted_in || !guest?.phone) {
-      await supabase.from('review_requests').update({ status: 'opted_out' }).eq('id', request.id)
+    // Fall back to the denormalized fields when there is no linked guest row.
+    const phone = guest?.phone ?? request.guest_phone
+    const name  = guest?.name  ?? request.guest_name ?? 'there'
+
+    // Respect opt-out. Only an explicit false blocks the send; a missing guest
+    // row means the request carried its own contact details.
+    if (!phone || guest?.whatsapp_opted_in === false) {
+      await supabase
+        .from('review_requests')
+        .update({ status: 'opted_out' })
+        .eq('id', request.id)
+      skipped++
       continue
     }
 
-    if (!venue?.whatsapp_phone_number_id || !venue?.whatsapp_access_token) {
-      results.push(`skip:${request.id} - no WhatsApp config`)
-      continue
-    }
+    const result = await sendReviewRequest({
+      phone,
+      guestName: name,
+      venueName: venue?.name ?? 'our venue',
+      requestId: request.id,
+      venueId:   request.venue_id,
+      guestId:   request.guest_id ?? undefined,
+    })
 
-    const firstName = guest.name?.split(' ')[0] || 'there'
-    const settings = venue.settings || {}
-    const reviewDelayCopy = (settings.review_message_copy as string) ||
-      `Hi ${firstName}! 🍽️\n\nThank you for dining at *${venue.name}* tonight!\n\nWe hope you had a wonderful experience. We'd love to hear your thoughts:`
-
-    try {
-      await sendInteractive(
-        venue.whatsapp_phone_number_id,
-        venue.whatsapp_access_token,
-        guest.phone,
-        reviewDelayCopy,
-        [
-          { id: `review_google_${request.id}`, title: '⭐ Leave Google Review' },
-          { id: `review_feedback_${request.id}`, title: '💬 Share Feedback' },
-        ],
-        `Takes 30 seconds · Means everything to us`
-      )
-
-      await supabase.from('review_requests').update({
-        status: 'sent',
-        sent_at: new Date().toISOString(),
-        review_url: (settings.google_review_url as string) || '',
-      }).eq('id', request.id)
-
+    if (result.ok) {
+      await supabase
+        .from('review_requests')
+        .update({ status: 'sent', sent_at: new Date().toISOString() })
+        .eq('id', request.id)
       sent++
-    } catch (err) {
-      console.error(`Failed to send review request ${request.id}:`, err)
-      results.push(`error:${request.id}`)
+    } else {
+      // Leave status pending so the next run retries transient failures.
+      console.error(`[review-dispatch] send failed for ${request.id}:`, result.error)
+      failed++
     }
   }
 
-  return NextResponse.json({ sent, processed: requests.length, results })
+  return NextResponse.json({ processed: requests.length, sent, skipped, failed })
 }
 
-// GET for manual trigger / health check
+// Health check / manual trigger
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get('authorization')
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!authorized(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   return NextResponse.json({ status: 'ok', timestamp: new Date().toISOString() })
 }

@@ -73,7 +73,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message, code: error.code, details: error.details }, { status: 500 })
     }
 
-    // Send WhatsApp review request — fire-and-forget
+    // Manual send goes out immediately — fire-and-forget, then record the outcome.
+    // scheduled_for stays NULL so the 45-minute dispatcher never picks this up too.
     if (resolvedPhone) {
       sendReviewRequest({
         phone:     resolvedPhone,
@@ -82,7 +83,17 @@ export async function POST(request: NextRequest) {
         requestId: reviewRequest.id,
         venueId:   venue_id,
         guestId:   guest_id,
-      }).catch(err => console.error('[review-requests] WhatsApp error:', err))
+      })
+        .then(result => admin
+          .from('review_requests')
+          .update(
+            result.ok
+              ? { status: 'sent', sent_at: new Date().toISOString() }
+              : { status: 'failed' }
+          )
+          .eq('id', reviewRequest.id)
+        )
+        .catch(err => console.error('[review-requests] WhatsApp error:', err))
     }
 
     return NextResponse.json({

@@ -20,6 +20,7 @@ export default function FeedbackPage() {
   const [hovered, setHovered] = useState(0)
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
+  const [googleReviewUrl, setGoogleReviewUrl] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -68,6 +69,7 @@ export default function FeedbackPage() {
         return
       }
 
+      setGoogleReviewUrl(data.google_review_url ?? null)
       setPageState(data.status === 'positive' ? 'positive' : 'negative')
     } catch {
       setPageState('error')
@@ -111,20 +113,28 @@ export default function FeedbackPage() {
         <h1 className="font-display text-2xl font-bold text-ink mb-3 text-center">
           We're so glad you had a great experience!
         </h1>
-        <p className="text-mid text-sm text-center mb-8 px-2">
-          Would you mind sharing your experience on Google? It helps others find us and means the world to our team.
-        </p>
-        <a
-          href="https://g.page/r/PLACEHOLDER_GOOGLE_REVIEW_LINK"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block w-full bg-ember text-white text-center font-semibold py-4 rounded-xl text-base mb-3 active:opacity-90 transition-opacity"
-        >
-          Leave a Google Review ⭐
-        </a>
-        <p className="text-[11px] text-mid/60 text-center mt-2">
-          Takes less than a minute
-        </p>
+        {googleReviewUrl ? (
+          <>
+            <p className="text-mid text-sm text-center mb-8 px-2">
+              Would you mind sharing your experience on Google? It helps others find us and means the world to our team.
+            </p>
+            <a
+              href={googleReviewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full bg-ember text-white text-center font-semibold py-4 rounded-xl text-base mb-3 active:opacity-90 transition-opacity"
+            >
+              Leave a Google Review ⭐
+            </a>
+            <p className="text-[11px] text-mid/60 text-center mt-2">
+              Takes less than a minute
+            </p>
+          </>
+        ) : (
+          <p className="text-mid text-sm text-center px-2">
+            Thank you for taking the time to tell us — we&rsquo;ll pass it on to the team.
+          </p>
+        )}
       </Screen>
     )
   }

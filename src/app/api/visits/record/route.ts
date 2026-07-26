@@ -67,13 +67,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Schedule review request (45-minute delay via review-request queue)
+    // Queue the review request — the dispatcher sends it once the delay elapses.
+    const delayMinutes = 45
     await supabase.from('review_requests').insert({
-      venue_id: body.venue_id,
-      guest_id: guest.id,
-      visit_id: visit.id,
-      channel: 'whatsapp',
-      status: 'pending',
+      venue_id:      body.venue_id,
+      guest_id:      guest.id,
+      visit_id:      visit.id,
+      channel:       'whatsapp',
+      status:        'pending',
+      guest_name:    guest.name || null,
+      guest_phone:   guest.phone || body.guest_phone,
+      scheduled_for: new Date(Date.now() + delayMinutes * 60_000).toISOString(),
     })
 
     // Track event

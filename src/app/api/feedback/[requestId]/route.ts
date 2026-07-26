@@ -7,7 +7,16 @@ const FeedbackSchema = z.object({
   feedback: z.string().max(2000).optional(),
 })
 
-// GET /api/feedback/[requestId] — returns request + venue info for the public page
+/**
+ * A request is still open for feedback while it is queued or delivered.
+ * Anything else (positive / negative / opted_out) has already been answered.
+ */
+const OPEN_STATUSES = new Set(['pending', 'sent'])
+
+/** Ratings at or above this go to Google; below it stay private. */
+const PUBLIC_REVIEW_THRESHOLD = 4
+
+// GET /api/feedback/[requestId] — request + venue info for the public page
 export async function GET(
   _request: NextRequest,
   { params }: { params: { requestId: string } }
@@ -24,14 +33,13 @@ export async function GET(
       return NextResponse.json({ error: 'Request not found' }, { status: 404 })
     }
 
-    if (data.status !== 'pending') {
+    if (!OPEN_STATUSES.has(data.status)) {
       return NextResponse.json(
         { error: 'already_completed', status: data.status },
         { status: 409 }
       )
     }
 
-    // Get venue name separately
     const { data: venue } = await admin
       .from('venues')
       .select('name')
@@ -43,20 +51,18 @@ export async function GET(
       guest_name: data.guest_name,
       venue_name: venue?.name || 'our venue',
     })
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// POST /api/feedback/[requestId] — submits feedback
+// POST /api/feedback/[requestId] — submits feedback and routes the outcome
 export async function POST(
   request: NextRequest,
   { params }: { params: { requestId: string } }
 ) {
   try {
-    const body = await request.json()
-    const parsed = FeedbackSchema.safeParse(body)
-
+    const parsed = FeedbackSchema.safeParse(await request.json())
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Invalid input', details: parsed.error.flatten() },
@@ -65,22 +71,21 @@ export async function POST(
     }
 
     const { rating, feedback } = parsed.data
-    const status = rating >= 4 ? 'positive' : 'negative'
+    const isPositive = rating >= PUBLIC_REVIEW_THRESHOLD
+    const status = isPositive ? 'positive' : 'negative'
 
     const admin = await createAdminClient()
 
-    // Check request exists and is pending
     const { data: existing } = await admin
       .from('review_requests')
-      .select('id, status, venue_id')
+      .select('id, status, venue_id, guest_id, guest_name')
       .eq('id', params.requestId)
       .single()
 
     if (!existing) {
       return NextResponse.json({ error: 'Request not found' }, { status: 404 })
     }
-
-    if (existing.status !== 'pending') {
+    if (!OPEN_STATUSES.has(existing.status)) {
       return NextResponse.json(
         { error: 'already_completed', status: existing.status },
         { status: 409 }
@@ -102,9 +107,33 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to save feedback' }, { status: 500 })
     }
 
-    // TODO: Trigger n8n for follow-up campaign
-    // if (status === 'positive') trigger Google review follow-up
-    // if (status === 'negative') trigger internal alert
+    const { data: venue } = await admin
+      .from('venues')
+      .select('name, settings')
+      .eq('id', existing.venue_id)
+      .single()
+
+    // Happy guest → hand them the public review link.
+    if (isPositive) {
+      const settings = (venue?.settings || {}) as Record<string, unknown>
+      const googleReviewUrl = (settings.google_review_url as string) || null
+      return NextResponse.json({ success: true, status, rating, google_review_url: googleReviewUrl })
+    }
+
+    // Unhappy guest → keep it private and put it in front of the owner.
+    const guestLabel = existing.guest_name || 'A guest'
+    await admin.from('action_items').insert({
+      venue_id:     existing.venue_id,
+      title:        `${rating}★ feedback needs a response`,
+      description:  feedback
+        ? `${guestLabel} rated ${rating}/5: "${feedback.slice(0, 300)}"`
+        : `${guestLabel} rated ${rating}/5 without leaving a comment.`,
+      type:         'negative_feedback',
+      priority:     rating <= 2 ? 'high' : 'medium',
+      status:       'pending',
+      related_id:   params.requestId,
+      related_type: 'review_request',
+    })
 
     return NextResponse.json({ success: true, status, rating })
   } catch (e) {
