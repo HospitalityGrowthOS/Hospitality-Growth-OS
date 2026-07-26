@@ -29,11 +29,7 @@ export async function POST(req: NextRequest) {
 
   const { data: requests, error } = await supabase
     .from('review_requests')
-    .select(`
-      id, venue_id, guest_id, guest_name, guest_phone,
-      guests ( name, phone, whatsapp_opted_in ),
-      venues ( name )
-    `)
+    .select('id, venue_id, guest_id, guest_name, guest_phone')
     .eq('status', 'pending')
     .lte('scheduled_for', now)
     .limit(BATCH_LIMIT)
@@ -44,13 +40,30 @@ export async function POST(req: NextRequest) {
   }
   if (!requests?.length) return NextResponse.json({ sent: 0, skipped: 0 })
 
+  // Resolve guests and venues in two batched lookups. Embedded joins aren't
+  // usable here — review_requests has no foreign key to guests.
+  const guestIds = [...new Set(requests.map(r => r.guest_id).filter(Boolean))] as string[]
+  const venueIds = [...new Set(requests.map(r => r.venue_id).filter(Boolean))] as string[]
+
+  const [{ data: guestRows }, { data: venueRows }] = await Promise.all([
+    guestIds.length
+      ? supabase.from('guests').select('id, name, phone, whatsapp_opted_in').in('id', guestIds)
+      : Promise.resolve({ data: [] as { id: string; name?: string; phone?: string; whatsapp_opted_in?: boolean }[] }),
+    venueIds.length
+      ? supabase.from('venues').select('id, name').in('id', venueIds)
+      : Promise.resolve({ data: [] as { id: string; name?: string }[] }),
+  ])
+
+  const guestsById = new Map((guestRows ?? []).map(g => [g.id, g]))
+  const venuesById = new Map((venueRows ?? []).map(v => [v.id, v]))
+
   let sent = 0
   let skipped = 0
   let failed = 0
 
   for (const request of requests) {
-    const guest = request.guests as { name?: string; phone?: string; whatsapp_opted_in?: boolean } | null
-    const venue = request.venues as { name?: string } | null
+    const guest = request.guest_id ? guestsById.get(request.guest_id) : undefined
+    const venue = venuesById.get(request.venue_id)
 
     // Fall back to the denormalized fields when there is no linked guest row.
     const phone = guest?.phone ?? request.guest_phone
