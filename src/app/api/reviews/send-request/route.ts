@@ -15,6 +15,12 @@ import { sendReviewRequest } from '@/lib/whatsapp-send'
 
 const BATCH_LIMIT = 50
 
+/**
+ * A request that keeps failing is abandoned after this many tries, so one bad
+ * recipient can't be retried every 5 minutes forever.
+ */
+const MAX_ATTEMPTS = 6
+
 function authorized(req: NextRequest) {
   return req.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`
 }
@@ -29,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   const { data: requests, error } = await supabase
     .from('review_requests')
-    .select('id, venue_id, guest_id, guest_name, guest_phone')
+    .select('id, venue_id, guest_id, guest_name, guest_phone, attempts')
     .eq('status', 'pending')
     .lte('scheduled_for', now)
     .limit(BATCH_LIMIT)
@@ -96,8 +102,20 @@ export async function POST(req: NextRequest) {
         .eq('id', request.id)
       sent++
     } else {
-      // Leave status pending so the next run retries transient failures.
-      console.error(`[review-dispatch] send failed for ${request.id}:`, result.error)
+      // Retry transient failures on the next run, but give up eventually so a
+      // permanently bad request isn't reattempted every 5 minutes forever.
+      const attempts = (request.attempts ?? 0) + 1
+      const exhausted = attempts >= MAX_ATTEMPTS
+
+      await supabase
+        .from('review_requests')
+        .update(exhausted ? { attempts, status: 'failed' } : { attempts })
+        .eq('id', request.id)
+
+      console.error(
+        `[review-dispatch] send failed for ${request.id} (attempt ${attempts}/${MAX_ATTEMPTS}):`,
+        result.error
+      )
       failed++
     }
   }
