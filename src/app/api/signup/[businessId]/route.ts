@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { sendLoyaltyWelcomeEmail } from '@/lib/email'
-import { sendLoyaltyWelcome as sendLoyaltyWelcomeWhatsApp } from '@/lib/twilio'
+import { sendLoyaltyWelcome as sendLoyaltyWelcomeWhatsApp } from '@/lib/whatsapp-send'
 
 const schema = z.object({
   name:     z.string().min(2, 'Name must be at least 2 characters').max(100),

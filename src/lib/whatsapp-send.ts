@@ -86,9 +86,11 @@ export async function sendTemplate(params: {
   templateName: string
   languageCode?: string
   bodyParams?: string[]
+  /** Fills the {{1}} placeholder in a dynamic URL button (the path suffix). */
+  urlButtonParam?: string
   venueId?: string
 }): Promise<SendResult> {
-  const { to, templateName, languageCode = 'en_US', bodyParams = [], venueId } = params
+  const { to, templateName, languageCode = 'en_US', bodyParams = [], urlButtonParam, venueId } = params
 
   const creds = await resolveCredentials(venueId)
   if (!creds) {
@@ -96,9 +98,21 @@ export async function sendTemplate(params: {
     return { ok: true, messageId: 'stub', stub: true }
   }
 
-  const components = bodyParams.length
-    ? [{ type: 'body', parameters: bodyParams.map(text => ({ type: 'text', text })) }]
-    : undefined
+  const components: Record<string, unknown>[] = []
+  if (bodyParams.length) {
+    components.push({
+      type: 'body',
+      parameters: bodyParams.map(text => ({ type: 'text', text })),
+    })
+  }
+  if (urlButtonParam) {
+    components.push({
+      type: 'button',
+      sub_type: 'url',
+      index: '0',
+      parameters: [{ type: 'text', text: urlButtonParam }],
+    })
+  }
 
   try {
     const res = await fetch(`${GRAPH_API}/${creds.phoneNumberId}/messages`, {
@@ -114,7 +128,7 @@ export async function sendTemplate(params: {
         template: {
           name: templateName,
           language: { code: languageCode },
-          ...(components && { components }),
+          ...(components.length && { components }),
         },
       }),
     })
@@ -161,6 +175,85 @@ export async function sendFreeform(params: {
     console.error('[WhatsApp] freeform send error:', err)
     return { ok: false, error: String(err) }
   }
+}
+
+// ── Business-initiated flows (approved templates) ──────────────────────────────
+
+/**
+ * Sent right after a guest enrolls via the QR signup.
+ * Template `loyalty_welcome`: body {{1}} first name, {{2}} venue, {{3}} points;
+ * URL button suffix {{1}} = memberId.
+ */
+export async function sendLoyaltyWelcome(params: {
+  phone: string
+  guestName: string
+  venueName: string
+  points: number
+  memberId: string
+  venueId: string
+  guestId?: string
+}): Promise<SendResult> {
+  const { phone, guestName, venueName, points, memberId, venueId, guestId } = params
+  const firstName = guestName.split(' ')[0] || 'there'
+
+  const result = await sendTemplate({
+    to: phone,
+    templateName: 'loyalty_welcome',
+    bodyParams: [firstName, venueName, String(points)],
+    urlButtonParam: memberId,
+    venueId,
+  })
+
+  await logMessage({
+    venueId,
+    guestId,
+    phone,
+    messageType:       'loyalty_welcome',
+    body:              `[loyalty_welcome] ${firstName} · ${venueName} · ${points} pts`,
+    status:            result.ok ? 'sent' : 'failed',
+    providerMessageId: result.messageId,
+    errorMessage:      result.error,
+  })
+
+  return result
+}
+
+/**
+ * Sent after a visit to invite feedback.
+ * Template `review_request`: body {{1}} first name, {{2}} venue;
+ * URL button suffix {{1}} = reviewRequestId.
+ */
+export async function sendReviewRequest(params: {
+  phone: string
+  guestName: string
+  venueName: string
+  requestId: string
+  venueId: string
+  guestId?: string
+}): Promise<SendResult> {
+  const { phone, guestName, venueName, requestId, venueId, guestId } = params
+  const firstName = guestName.split(' ')[0] || 'there'
+
+  const result = await sendTemplate({
+    to: phone,
+    templateName: 'review_request',
+    bodyParams: [firstName, venueName],
+    urlButtonParam: requestId,
+    venueId,
+  })
+
+  await logMessage({
+    venueId,
+    guestId,
+    phone,
+    messageType:       'review_request',
+    body:              `[review_request] ${firstName} · ${venueName}`,
+    status:            result.ok ? 'sent' : 'failed',
+    providerMessageId: result.messageId,
+    errorMessage:      result.error,
+  })
+
+  return result
 }
 
 // ── Message log ────────────────────────────────────────────────────────────────

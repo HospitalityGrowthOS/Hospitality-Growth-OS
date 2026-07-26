@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { z } from 'zod'
-import { sendReviewRequest } from '@/lib/twilio'
+import { sendReviewRequest } from '@/lib/whatsapp-send'
 
 const CreateRequestSchema = z.object({
   venue_id: z.string().uuid(),
@@ -75,14 +75,13 @@ export async function POST(request: NextRequest) {
 
     // Send WhatsApp review request — fire-and-forget
     if (resolvedPhone) {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'
       sendReviewRequest({
-        phone:       resolvedPhone,
-        guestName:   resolvedName || 'Guest',
-        venueName:   venue.name,
-        feedbackUrl: `${appUrl}/feedback/${reviewRequest.id}`,
-        venueId:     venue_id,
-        guestId:     guest_id,
+        phone:     resolvedPhone,
+        guestName: resolvedName || 'Guest',
+        venueName: venue.name,
+        requestId: reviewRequest.id,
+        venueId:   venue_id,
+        guestId:   guest_id,
       }).catch(err => console.error('[review-requests] WhatsApp error:', err))
     }
 
