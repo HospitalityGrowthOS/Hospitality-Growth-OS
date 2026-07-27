@@ -7,7 +7,7 @@ Update shapes:
   Insert  — required columns without a default are mandatory, rest optional
   Update  — everything optional
 """
-import json, os, sys, urllib.request
+import json, os, re, sys, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, '..', 'src', 'types', 'database.ts')
@@ -54,6 +54,22 @@ def ts_type(prop):
     return 'string'
 
 
+FK_RE = re.compile(r"<fk table='([^']+)' column='([^']+)'/>")
+
+
+def foreign_keys(schema):
+    """PostgREST documents FKs in the column description, e.g.
+       "This is a Foreign Key to `venues.id`.<fk table='venues' column='id'/>"
+       postgrest-js needs these to resolve embedded selects at the type level;
+       without them every `table(col)` embed widens to never."""
+    out = []
+    for col, prop in schema.get('properties', {}).items():
+        m = FK_RE.search(prop.get('description', '') or '')
+        if m:
+            out.append((col, m.group(1), m.group(2)))
+    return out
+
+
 def emit_table(name, schema):
     props = schema.get('properties', {})
     required = set(schema.get('required', []))
@@ -74,6 +90,22 @@ def emit_table(name, schema):
 
         updates.append(f'          {col}?: {base}{" | null" if nullable else ""}')
 
+    fks = foreign_keys(schema)
+    if fks:
+        rels = [
+            '\n          {\n'
+            f'            foreignKeyName: "{name}_{col}_fkey"\n'
+            f'            columns: ["{col}"]\n'
+            '            isOneToOne: false\n'
+            f'            referencedRelation: "{ftable}"\n'
+            f'            referencedColumns: ["{fcol}"]\n'
+            '          }'
+            for col, ftable, fcol in fks
+        ]
+        rel_block = ','.join(rels) + '\n        '
+    else:
+        rel_block = ''
+
     return f"""      {name}: {{
         Row: {{
 {chr(10).join(rows)}
@@ -84,7 +116,7 @@ def emit_table(name, schema):
         Update: {{
 {chr(10).join(updates)}
         }}
-        Relationships: []
+        Relationships: [{rel_block}]
       }}"""
 
 
