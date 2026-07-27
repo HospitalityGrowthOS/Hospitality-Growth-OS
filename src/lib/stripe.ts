@@ -7,8 +7,10 @@ export function getStripe(): Stripe {
     if (!process.env.STRIPE_SECRET_KEY) {
       throw new Error('STRIPE_SECRET_KEY is not set')
     }
+    // Must match the version this SDK's types are generated against, otherwise
+    // the types describe a different API than we actually speak.
     _stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2025-03-31.basil',
+      apiVersion: '2026-03-25.dahlia',
     })
   }
   return _stripe

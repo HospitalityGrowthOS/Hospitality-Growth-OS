@@ -44,6 +44,25 @@ async function upsertSubscription(
   }
 }
 
+/**
+ * Locate the subscription on an invoice across Stripe API versions.
+ *
+ * Up to 2025-03-31 the id sat at `invoice.subscription`. From 2025-04 it moved
+ * to `invoice.parent.subscription_details.subscription`. Webhook payloads are
+ * serialised with the version configured on the Stripe endpoint, which is not
+ * necessarily the version this SDK targets, so both shapes must be handled —
+ * otherwise a failed payment silently fails to mark the account past due.
+ */
+function subscriptionIdFromInvoice(invoice: Stripe.Invoice): string | null {
+  const modern = invoice.parent?.subscription_details?.subscription
+  if (modern) return typeof modern === 'string' ? modern : modern.id
+
+  const legacy = (invoice as unknown as { subscription?: string | { id: string } }).subscription
+  if (legacy) return typeof legacy === 'string' ? legacy : legacy.id
+
+  return null
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.text()
   const sig = request.headers.get('stripe-signature')
@@ -123,11 +142,14 @@ export async function POST(request: NextRequest) {
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice
-        if (invoice.subscription) {
+        const subscriptionId = subscriptionIdFromInvoice(invoice)
+        if (subscriptionId) {
           await admin
             .from('subscriptions')
             .update({ status: 'past_due', updated_at: new Date().toISOString() })
-            .eq('stripe_subscription_id', invoice.subscription as string)
+            .eq('stripe_subscription_id', subscriptionId)
+        } else {
+          console.warn('[webhook] payment_failed with no subscription on invoice', invoice.id)
         }
         break
       }
