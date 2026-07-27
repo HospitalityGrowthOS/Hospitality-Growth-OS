@@ -55,7 +55,7 @@ async function processInbound(payload: Record<string, unknown>) {
   if (!guest) {
     const { data } = await supabase
       .from('guests')
-      .insert({ venue_id: venue.id, phone: msg.from, whatsapp_opted_in: true })
+      .insert({ venue_id: venue.id, name: msg.from, phone: msg.from, whatsapp_opted_in: true })
       .select()
       .single()
     guest = data
@@ -102,7 +102,7 @@ async function handleButtonReply(
 async function handleTextMessage(
   msg: { from: string; text?: string; messageId: string },
   venue: Record<string, unknown>,
-  guest: Record<string, unknown>,
+  guest: { id: string; name?: string | null; loyalty_tier?: string | null },
   supabase: Awaited<ReturnType<typeof createAdminClient>>
 ) {
   if (!msg.text) return
@@ -142,6 +142,7 @@ async function handleTextMessage(
     content: msg.text,
     channel_message_id: msg.messageId,
     sent_at: new Date().toISOString(),
+    metadata: {},
   })
 
   // Get history

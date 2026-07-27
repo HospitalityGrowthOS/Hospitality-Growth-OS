@@ -61,6 +61,7 @@ export async function awardPoints(params: {
       member_id: memberId,
       type: 'earn',
       points: pointsEarned,
+      balance_after: newBalance,
       description: `Visit spend €${spendAmount.toFixed(2)}`,
       reference_id: visitId || null,
     }),

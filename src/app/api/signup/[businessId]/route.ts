@@ -159,8 +159,9 @@ export async function POST(
       venue_id:    venueId,
       member_id:   member.id,
       type:        'bonus',
-      points:      WELCOME_POINTS,
-      description: 'Welcome bonus — loyalty signup',
+      points:        WELCOME_POINTS,
+      balance_after: WELCOME_POINTS,
+      description:   'Welcome bonus — loyalty signup',
       reference_id: member.id,
     })
 

@@ -51,8 +51,8 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (guest) {
-        resolvedName = resolvedName || guest.name
-        resolvedPhone = resolvedPhone || guest.phone
+        resolvedName = resolvedName || guest.name || undefined
+        resolvedPhone = resolvedPhone || guest.phone || undefined
       }
     }
 

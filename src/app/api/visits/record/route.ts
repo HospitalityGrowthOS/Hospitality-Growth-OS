@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     if (!guest) {
       const { data } = await supabase
         .from('guests')
-        .insert({ venue_id: venueId, phone: body.guest_phone, whatsapp_opted_in: true })
+        .insert({ venue_id: venueId, name: body.guest_phone, phone: body.guest_phone, whatsapp_opted_in: true })
         .select().single()
       guest = data
     }
