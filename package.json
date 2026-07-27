@@ -7,11 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "gen:types": "python3 scripts/gen-types.py"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.3",
-    "@supabase/ssr": "^0.4.0",
+    "@supabase/ssr": "^0.12.3",
     "@supabase/supabase-js": "^2.44.4",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
