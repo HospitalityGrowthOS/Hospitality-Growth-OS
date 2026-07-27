@@ -15,7 +15,7 @@ const SettingsSchema = z.object({
 
 export async function PATCH(req: NextRequest) {
   const venue = await getCurrentVenue()
-  if (!venue) return NextResponse.json({ error: 'No venue found' }, { status: 404 })
+  if (!venue) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const parsed = SettingsSchema.safeParse(await req.json())
   if (!parsed.success) {
