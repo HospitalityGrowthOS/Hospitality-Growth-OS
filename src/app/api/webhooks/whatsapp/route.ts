@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { verifyWebhook, parsePayload, markRead, sendText, sendInteractive } from '@/lib/whatsapp'
-import { generateGuestReply, detectIntent } from '@/lib/claude'
+import {
+  buildVenueContext,
+  captureReservationRequest,
+  escalateConversation,
+  handleGuestMessage,
+  DEFAULT_MODEL,
+  type ConversationTurn,
+} from '@/lib/ai'
 
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN!
 
@@ -102,7 +109,7 @@ async function handleButtonReply(
 async function handleTextMessage(
   msg: { from: string; text?: string; messageId: string },
   venue: Record<string, unknown>,
-  guest: { id: string; name?: string | null; loyalty_tier?: string | null },
+  guest: { id: string; name?: string | null; loyalty_tier?: string | null; loyalty_points?: number | null },
   supabase: Awaited<ReturnType<typeof createAdminClient>>
 ) {
   if (!msg.text) return
@@ -110,9 +117,8 @@ async function handleTextMessage(
   const venueId = venue.id as string
   const phoneId = venue.whatsapp_phone_number_id as string
   const token = venue.whatsapp_access_token as string
-  const settings = venue.settings as Record<string, unknown>
 
-  // Get/create conversation
+  // Reuse the open thread so the assistant has context; otherwise start one.
   let { data: conversation } = await supabase
     .from('conversations')
     .select('*')
@@ -122,19 +128,60 @@ async function handleTextMessage(
     .eq('status', 'open')
     .order('created_at', { ascending: false })
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (!conversation) {
     const { data } = await supabase
       .from('conversations')
-      .insert({ venue_id: venueId, guest_id: guest.id as string, channel: 'whatsapp', status: 'open', ai_handled: true, context: {} })
-      .select().single()
+      .insert({
+        venue_id: venueId,
+        guest_id: guest.id,
+        channel: 'whatsapp',
+        status: 'open',
+        ai_handled: true,
+        context: {},
+      })
+      .select()
+      .single()
     conversation = data
   }
-
   if (!conversation) return
 
-  // Store guest message
+  const { data: history } = await supabase
+    .from('messages')
+    .select('role, content')
+    .eq('conversation_id', conversation.id)
+    .order('sent_at', { ascending: false })
+    .limit(10)
+
+  const turns: ConversationTurn[] = (history ?? [])
+    .reverse()
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+
+  const venueContext = buildVenueContext({
+    id: venueId,
+    name: venue.name as string,
+    type: venue.type as string | null,
+    city: venue.city as string | null,
+    address: venue.address as string | null,
+    settings: venue.settings,
+  })
+
+  const result = await handleGuestMessage({
+    message: msg.text,
+    venue: venueContext,
+    guest: {
+      id: guest.id,
+      name: guest.name,
+      tier: guest.loyalty_tier,
+      points: guest.loyalty_points,
+    },
+    history: turns,
+  })
+
+  // Store the guest's message either way — losing it because the assistant
+  // was unavailable would leave the team with no record of what was asked.
   await supabase.from('messages').insert({
     conversation_id: conversation.id,
     venue_id: venueId,
@@ -143,65 +190,61 @@ async function handleTextMessage(
     channel_message_id: msg.messageId,
     sent_at: new Date().toISOString(),
     metadata: {},
+    intent: result.ok ? result.data.intent : null,
+    sentiment: result.ok ? result.data.sentiment : null,
   })
 
-  // Get history
-  const { data: history } = await supabase
-    .from('messages')
-    .select('role, content')
-    .eq('conversation_id', conversation.id)
-    .order('sent_at', { ascending: false })
-    .limit(10)
+  if (!result.ok) {
+    // No assistant available: hand the guest to a person rather than ignoring them.
+    await escalateConversation({
+      venueId,
+      conversationId: conversation.id,
+      reason:
+        result.reason === 'not_configured'
+          ? 'Assistant is not configured, so this message was not answered'
+          : `Assistant could not reply: ${result.message}`,
+      guestLabel: guest.name ?? msg.from,
+      lastMessage: msg.text,
+    })
+    return
+  }
 
-  const conversationHistory = (history || []).reverse().map(m => ({
-    role: m.role as 'user' | 'assistant',
-    content: m.content,
-  }))
+  const reply = result.data
 
-  // Detect intent + generate reply
-  const intent = await detectIntent(msg.text)
-  const { response, shouldEscalate } = await generateGuestReply({
-    message: msg.text,
-    venueName: venue.name as string,
-    venueType: venue.type as string,
-    city: venue.city as string || '',
-    address: venue.address as string || '',
-    openingHours: JSON.stringify(settings?.opening_hours || {}),
-    cuisineType: settings?.cuisine_type as string,
-    aiPersonaName: settings?.ai_persona_name as string || 'Sofia',
-    guestName: guest.name as string,
-    guestTier: guest.loyalty_tier as string,
-    conversationHistory,
-    intent,
-  })
-
-  // Store AI response
   await supabase.from('messages').insert({
     conversation_id: conversation.id,
     venue_id: venueId,
     role: 'assistant',
-    content: response,
+    content: reply.message,
     sent_at: new Date().toISOString(),
-    metadata: { intent, model: 'claude-sonnet-4-6' },
+    metadata: { model: DEFAULT_MODEL },
+    intent: reply.intent,
+    sentiment: reply.sentiment,
   })
 
-  // Send WhatsApp reply
-  await sendText(phoneId, token, msg.from, response)
+  await sendText(phoneId, token, msg.from, reply.message)
 
-  // Handle escalation
-  if (shouldEscalate) {
-    await Promise.all([
-      supabase.from('conversations').update({ status: 'escalated', human_takeover_at: new Date().toISOString() }).eq('id', conversation.id),
-      supabase.from('action_items').insert({
-        venue_id: venueId,
-        title: 'Guest needs human support',
-        description: `AI escalated. Last message: "${msg.text?.substring(0, 100)}"`,
-        type: 'conversation_escalation',
-        priority: 'high',
-        status: 'pending',
-        related_id: conversation.id,
-        related_type: 'conversation',
-      }),
-    ])
+  // A reservation is only ever captured, never confirmed.
+  if (reply.reservation) {
+    await captureReservationRequest({
+      venueId,
+      guestId: guest.id,
+      guestName: guest.name,
+      guestPhone: msg.from,
+      details: reply.reservation,
+      sourceMessage: msg.text,
+      channel: 'whatsapp',
+    })
+  }
+
+  if (reply.shouldEscalate) {
+    await escalateConversation({
+      venueId,
+      conversationId: conversation.id,
+      reason: reply.escalationReason ?? 'Guest needs a member of the team',
+      guestLabel: guest.name ?? msg.from,
+      lastMessage: msg.text,
+      sentiment: reply.sentiment,
+    })
   }
 }

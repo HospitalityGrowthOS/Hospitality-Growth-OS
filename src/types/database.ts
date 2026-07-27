@@ -76,6 +76,53 @@ export interface Database {
           }
         ]
       }
+      ai_interactions: {
+        Row: {
+          id: string
+          venue_id: string | null
+          feature: string
+          model: string
+          success: boolean
+          latency_ms: number | null
+          input_tokens: number | null
+          output_tokens: number | null
+          error_message: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          venue_id?: string | null
+          feature: string
+          model: string
+          success?: boolean
+          latency_ms?: number | null
+          input_tokens?: number | null
+          output_tokens?: number | null
+          error_message?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          venue_id?: string | null
+          feature?: string
+          model?: string
+          success?: boolean
+          latency_ms?: number | null
+          input_tokens?: number | null
+          output_tokens?: number | null
+          error_message?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_interactions_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       ai_recommendations: {
         Row: {
           id: string
@@ -970,6 +1017,8 @@ export interface Database {
           metadata: Json
           created_at: string
           updated_at: string
+          intent: string | null
+          sentiment: string | null
         }
         Insert: {
           id?: string
@@ -986,6 +1035,8 @@ export interface Database {
           metadata: Json
           created_at?: string
           updated_at?: string
+          intent?: string | null
+          sentiment?: string | null
         }
         Update: {
           id?: string
@@ -1002,6 +1053,8 @@ export interface Database {
           metadata?: Json
           created_at?: string
           updated_at?: string
+          intent?: string | null
+          sentiment?: string | null
         }
         Relationships: [
           {
@@ -1132,6 +1185,78 @@ export interface Database {
             columns: ["venue_id"]
             isOneToOne: false
             referencedRelation: "venues"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      reservation_requests: {
+        Row: {
+          id: string
+          venue_id: string
+          guest_id: string | null
+          guest_name: string | null
+          guest_phone: string | null
+          requested_date: string | null
+          requested_time: string | null
+          party_size: number | null
+          notes: string | null
+          source_message: string | null
+          channel: string
+          status: string
+          handled_by: string | null
+          handled_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          venue_id: string
+          guest_id?: string | null
+          guest_name?: string | null
+          guest_phone?: string | null
+          requested_date?: string | null
+          requested_time?: string | null
+          party_size?: number | null
+          notes?: string | null
+          source_message?: string | null
+          channel?: string
+          status?: string
+          handled_by?: string | null
+          handled_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          venue_id?: string
+          guest_id?: string | null
+          guest_name?: string | null
+          guest_phone?: string | null
+          requested_date?: string | null
+          requested_time?: string | null
+          party_size?: number | null
+          notes?: string | null
+          source_message?: string | null
+          channel?: string
+          status?: string
+          handled_by?: string | null
+          handled_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservation_requests_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reservation_requests_guest_id_fkey"
+            columns: ["guest_id"]
+            isOneToOne: false
+            referencedRelation: "guests"
             referencedColumns: ["id"]
           }
         ]
