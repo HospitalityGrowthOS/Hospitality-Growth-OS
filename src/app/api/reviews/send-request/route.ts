@@ -16,10 +16,12 @@ import { sendReviewRequest } from '@/lib/whatsapp-send'
 const BATCH_LIMIT = 50
 
 /**
- * A request that keeps failing is abandoned after this many tries, so one bad
- * recipient can't be retried every 5 minutes forever.
+ * A request that couldn't be delivered within this window is abandoned rather
+ * than retried by the 5-minute cron forever. Age is a better cutoff than an
+ * attempt counter here: a review request that is a day late is stale anyway,
+ * and asking about a visit that long ago reads as careless.
  */
-const MAX_ATTEMPTS = 6
+const MAX_AGE_HOURS = 24
 
 function authorized(req: NextRequest) {
   return req.headers.get('authorization') === `Bearer ${process.env.CRON_SECRET}`
@@ -32,10 +34,11 @@ export async function POST(req: NextRequest) {
 
   const supabase = await createAdminClient()
   const now = new Date().toISOString()
+  const staleBefore = new Date(Date.now() - MAX_AGE_HOURS * 60 * 60 * 1000).toISOString()
 
   const { data: requests, error } = await supabase
     .from('review_requests')
-    .select('id, venue_id, guest_id, guest_name, guest_phone, attempts')
+    .select('id, venue_id, guest_id, guest_name, guest_phone, scheduled_for')
     .eq('status', 'pending')
     .lte('scheduled_for', now)
     .limit(BATCH_LIMIT)
@@ -48,8 +51,8 @@ export async function POST(req: NextRequest) {
 
   // Resolve guests and venues in two batched lookups. Embedded joins aren't
   // usable here — review_requests has no foreign key to guests.
-  const guestIds = [...new Set(requests.map(r => r.guest_id).filter(Boolean))] as string[]
-  const venueIds = [...new Set(requests.map(r => r.venue_id).filter(Boolean))] as string[]
+  const guestIds = Array.from(new Set(requests.map(r => r.guest_id).filter(Boolean))) as string[]
+  const venueIds = Array.from(new Set(requests.map(r => r.venue_id).filter(Boolean))) as string[]
 
   const [{ data: guestRows }, { data: venueRows }] = await Promise.all([
     guestIds.length
@@ -102,18 +105,18 @@ export async function POST(req: NextRequest) {
         .eq('id', request.id)
       sent++
     } else {
-      // Retry transient failures on the next run, but give up eventually so a
-      // permanently bad request isn't reattempted every 5 minutes forever.
-      const attempts = (request.attempts ?? 0) + 1
-      const exhausted = attempts >= MAX_ATTEMPTS
-
-      await supabase
-        .from('review_requests')
-        .update(exhausted ? { attempts, status: 'failed' } : { attempts })
-        .eq('id', request.id)
+      // Retry transient failures on the next run; abandon anything that has
+      // been failing past the staleness window.
+      const stale = (request.scheduled_for ?? now) < staleBefore
+      if (stale) {
+        await supabase
+          .from('review_requests')
+          .update({ status: 'failed' })
+          .eq('id', request.id)
+      }
 
       console.error(
-        `[review-dispatch] send failed for ${request.id} (attempt ${attempts}/${MAX_ATTEMPTS}):`,
+        `[review-dispatch] send failed for ${request.id}${stale ? ' (abandoned — too old)' : ' (will retry)'}:`,
         result.error
       )
       failed++

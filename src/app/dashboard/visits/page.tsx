@@ -57,7 +57,7 @@ export default async function VisitsPage() {
   const visits = visitRows ?? []
 
   // Resolve guest names in one batched lookup — there is no FK to join on.
-  const guestIds = [...new Set(visits.map(v => v.guest_id).filter(Boolean))] as string[]
+  const guestIds = Array.from(new Set(visits.map(v => v.guest_id).filter(Boolean))) as string[]
   const { data: guestRows } = guestIds.length
     ? await supabase.from('guests').select('id, name, phone').in('id', guestIds)
     : { data: [] as { id: string; name?: string; phone?: string }[] }
