@@ -68,7 +68,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Queue the review request — the dispatcher sends it once the delay elapses.
-    const delayMinutes = 45
+    const { data: venueRow } = await supabase
+      .from('venues')
+      .select('settings')
+      .eq('id', body.venue_id)
+      .single()
+
+    const venueSettings = (venueRow?.settings || {}) as Record<string, unknown>
+    const delayMinutes = (venueSettings.review_delay_minutes as number) ?? 45
     await supabase.from('review_requests').insert({
       venue_id:      body.venue_id,
       guest_id:      guest.id,
