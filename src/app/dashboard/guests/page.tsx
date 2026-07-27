@@ -128,7 +128,9 @@ export default async function GuestsPage() {
 
                 <div className="font-data text-[13px] font-semibold text-ink">€{(g.total_spent || 0).toFixed(0)}</div>
 
-                <Button size="sm" variant="ghost" className="text-[11px] px-2">View</Button>
+                <Link href={`/dashboard/guests/${g.id}`}>
+                  <Button size="sm" variant="ghost" className="text-[11px] px-2">View</Button>
+                </Link>
               </div>
             ))}
             {(totalGuests ?? 0) > 50 && (
