@@ -11,6 +11,8 @@ interface SidebarProps {
   venueName: string
   venueInitials: string
   planName?: string | null
+  reviewsBadge?: number
+  aiBadge?: number
 }
 
 const NAV = [
@@ -24,10 +26,11 @@ const NAV = [
   {
     section: 'Guest Systems',
     items: [
-      { href: '/dashboard/reviews', label: 'Reviews', icon: StarIcon, badge: 3 },
+      { href: '/dashboard/visits', label: 'Visits', icon: ReceiptIcon },
+      { href: '/dashboard/reviews', label: 'Reviews', icon: StarIcon, badgeKey: 'reviews' as const },
       { href: '/dashboard/loyalty', label: 'Loyalty Members', icon: HeartIcon },
       { href: '/dashboard/whatsapp', label: 'WhatsApp', icon: WhatsAppIcon },
-      { href: '/dashboard/ai', label: 'AI Assistant', icon: ChatIcon, badge: 2 },
+      { href: '/dashboard/ai', label: 'AI Assistant', icon: ChatIcon, badgeKey: 'ai' as const },
     ],
   },
   {
@@ -46,7 +49,8 @@ const NAV = [
   },
 ]
 
-export default function Sidebar({ userName, userInitials, userEmail, venueName, venueInitials, planName }: SidebarProps) {
+export default function Sidebar({ userName, userInitials, userEmail, venueName, venueInitials, planName, reviewsBadge = 0, aiBadge = 0 }: SidebarProps) {
+  const badgeCounts = { reviews: reviewsBadge, ai: aiBadge }
   const pathname = usePathname()
   const router = useRouter()
 
@@ -93,7 +97,9 @@ export default function Sidebar({ userName, userInitials, userEmail, venueName, 
         {NAV.map(({ section, items }) => (
           <div key={section}>
             <div className="px-5 pt-4 pb-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-mid/60">{section}</div>
-            {items.map(({ href, label, icon: Icon, badge, exact }) => (
+            {items.map(({ href, label, icon: Icon, badgeKey, exact }) => {
+              const badge = badgeKey ? badgeCounts[badgeKey] : 0
+              return (
               <Link
                 key={href}
                 href={href}
@@ -109,13 +115,14 @@ export default function Sidebar({ userName, userInitials, userEmail, venueName, 
                 )}
                 <Icon className={cn('w-4 h-4 flex-shrink-0', isActive(href, exact) ? 'opacity-100' : 'opacity-70')}/>
                 <span className="flex-1">{label}</span>
-                {badge && (
+                {badge > 0 && (
                   <span className="bg-ember text-white text-[10px] font-bold font-data px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                     {badge}
                   </span>
                 )}
               </Link>
-            ))}
+              )
+            })}
           </div>
         ))}
       </nav>
@@ -146,6 +153,9 @@ export default function Sidebar({ userName, userInitials, userEmail, venueName, 
 }
 
 // ── Icons ─────────────────────────────────────────────────────
+function ReceiptIcon({ className }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="14" y2="12"/></svg>
+}
 function HomeIcon({ className }: { className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
 }

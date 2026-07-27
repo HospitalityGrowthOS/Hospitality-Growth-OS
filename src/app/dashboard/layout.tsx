@@ -27,6 +27,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
     planName = sub?.plan || null
   }
 
+  // Real nav badge counts — these were hardcoded, showing "3" and "2" forever.
+  let reviewsBadge = 0
+  let aiBadge = 0
+  if (venue) {
+    const admin = await createAdminClient()
+    const [{ count: negative }, { count: escalated }] = await Promise.all([
+      admin.from('action_items').select('id', { count: 'exact', head: true })
+        .eq('venue_id', venue.id).eq('type', 'negative_feedback').eq('status', 'pending'),
+      admin.from('action_items').select('id', { count: 'exact', head: true })
+        .eq('venue_id', venue.id).eq('type', 'conversation_escalation').eq('status', 'pending'),
+    ])
+    reviewsBadge = negative ?? 0
+    aiBadge = escalated ?? 0
+  }
+
   const isTrialing = !subscriptionStatus || subscriptionStatus === 'trial' || subscriptionStatus === 'trialing'
   const isPastDue = subscriptionStatus === 'past_due'
 
@@ -39,6 +54,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         venueName={venueName}
         venueInitials={venueInitials}
         planName={planName}
+        reviewsBadge={reviewsBadge}
+        aiBadge={aiBadge}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Trial banner */}

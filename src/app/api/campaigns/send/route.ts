@@ -6,12 +6,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/server'
+import { getCurrentVenue } from '@/lib/venue'
 import { sendText } from '@/lib/whatsapp'
 
 const schema = z.object({ campaign_id: z.string().uuid() })
 
 export async function POST(req: NextRequest) {
   try {
+    const owner = await getCurrentVenue()
+    if (!owner) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
     const { campaign_id } = schema.parse(await req.json())
     const supabase = await createAdminClient()
 
@@ -19,6 +23,7 @@ export async function POST(req: NextRequest) {
       .from('campaigns')
       .select('*, venues(*)')
       .eq('id', campaign_id)
+      .eq('venue_id', owner.id)   // a campaign can only be sent by its own venue
       .single()
 
     const campaign = campaignRaw as unknown as {

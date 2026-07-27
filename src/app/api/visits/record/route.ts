@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/server'
+import { getCurrentVenue } from '@/lib/venue'
+import { awardPoints } from '@/lib/loyalty'
 
 const schema = z.object({
-  venue_id: z.string().uuid(),
+  // Accepted for backwards compatibility but never trusted — the venue always
+  // comes from the signed-in owner's session.
+  venue_id: z.string().uuid().optional(),
   guest_phone: z.string().min(7),
   spend_amount: z.number().nonnegative().default(0),
   party_size: z.number().int().positive().default(1),
@@ -14,21 +18,25 @@ const schema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    const venue = await getCurrentVenue()
+    if (!venue) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
     const body = schema.parse(await req.json())
+    const venueId = venue.id
     const supabase = await createAdminClient()
 
     // Find or create guest
     let { data: guest } = await supabase
       .from('guests')
       .select('*')
-      .eq('venue_id', body.venue_id)
+      .eq('venue_id', venueId)
       .eq('phone', body.guest_phone)
       .single()
 
     if (!guest) {
       const { data } = await supabase
         .from('guests')
-        .insert({ venue_id: body.venue_id, phone: body.guest_phone, whatsapp_opted_in: true })
+        .insert({ venue_id: venueId, phone: body.guest_phone, whatsapp_opted_in: true })
         .select().single()
       guest = data
     }
@@ -36,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     // Record visit
     const { data: visit } = await supabase.from('visits').insert({
-      venue_id: body.venue_id,
+      venue_id: venueId,
       guest_id: guest.id,
       visited_at: new Date().toISOString(),
       party_size: body.party_size,
@@ -53,31 +61,26 @@ export async function POST(req: NextRequest) {
       const { data: member } = await supabase
         .from('loyalty_members')
         .select('id')
-        .eq('venue_id', body.venue_id)
+        .eq('venue_id', venueId)
         .eq('guest_id', guest.id)
         .single()
 
       if (member) {
-        // Fire-and-forget points award
-        fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/loyalty/award-points`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ member_id: member.id, venue_id: body.venue_id, spend_amount: body.spend_amount, visit_id: visit.id }),
-        }).catch(console.error)
+        // Direct call — an HTTP hop here would carry no session and fail auth.
+        await awardPoints({
+          memberId:    member.id,
+          venueId,
+          spendAmount: body.spend_amount,
+          visitId:     visit.id,
+        }).catch(err => console.error('[visits] award points failed:', err))
       }
     }
 
     // Queue the review request — the dispatcher sends it once the delay elapses.
-    const { data: venueRow } = await supabase
-      .from('venues')
-      .select('settings')
-      .eq('id', body.venue_id)
-      .single()
-
-    const venueSettings = (venueRow?.settings || {}) as Record<string, unknown>
+    const venueSettings = (venue.settings || {}) as Record<string, unknown>
     const delayMinutes = (venueSettings.review_delay_minutes as number) ?? 45
     await supabase.from('review_requests').insert({
-      venue_id:      body.venue_id,
+      venue_id:      venueId,
       guest_id:      guest.id,
       visit_id:      visit.id,
       channel:       'whatsapp',
@@ -88,7 +91,7 @@ export async function POST(req: NextRequest) {
     })
 
     // Track event
-    await supabase.from('analytics_events').insert({ venue_id: body.venue_id, event_type: 'visit_recorded', properties: { visit_id: visit.id, spend: body.spend_amount } })
+    await supabase.from('analytics_events').insert({ venue_id: venueId, event_type: 'visit_recorded', properties: { visit_id: visit.id, spend: body.spend_amount } })
 
     return NextResponse.json({ success: true, visit_id: visit.id, guest_id: guest.id })
   } catch (err) {
