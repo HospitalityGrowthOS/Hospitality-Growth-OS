@@ -1,10 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    // Types are correct at runtime — Supabase generic inference issues
-    // will be resolved when we generate types from the live schema
-    ignoreBuildErrors: true,
-  },
+  // Types are generated from the live Supabase schema (npm run gen:types),
+  // so a type error here means the code and the database disagree. Let it fail
+  // the build rather than reach production.
   eslint: {
     ignoreDuringBuilds: true,
   },

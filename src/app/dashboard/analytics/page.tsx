@@ -79,7 +79,7 @@ export default async function GrowthIntelligencePage() {
     if (!v.guest_id) continue
     visitsByGuest.set(v.guest_id, (visitsByGuest.get(v.guest_id) ?? 0) + 1)
   }
-  const repeatGuests = [...visitsByGuest.values()].filter(n => n > 1).length
+  const repeatGuests = Array.from(visitsByGuest.values()).filter(n => n > 1).length
   const repeatRate = pct(repeatGuests, visitsByGuest.size)
 
   const revenue30 = visits.reduce((s, v) => s + (v.spend_amount ?? 0), 0)

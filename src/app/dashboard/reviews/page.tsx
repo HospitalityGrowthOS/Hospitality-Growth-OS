@@ -251,9 +251,9 @@ export default async function ReviewsPage() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <span className="font-medium text-[13px] text-ink">{review.author_name || 'Anonymous'}</span>
-                                <StarRating rating={review.rating} />
+                                <StarRating rating={review.rating ?? 0} />
                                 <Badge variant="teal" className="text-[10px]">{review.platform}</Badge>
-                                <span className="text-[11px] text-mid ml-auto">{new Date(review.review_date).toLocaleDateString()}</span>
+                                <span className="text-[11px] text-mid ml-auto">{review.review_date ? new Date(review.review_date).toLocaleDateString() : '—'}</span>
                               </div>
                               <p className="text-[13px] text-charcoal leading-relaxed mb-3">{review.content || 'No review text'}</p>
                               {review.ai_response_draft && (
@@ -288,9 +288,9 @@ export default async function ReviewsPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
                             <span className="font-medium text-[13px] text-ink">{review.author_name || 'Anonymous'}</span>
-                            <StarRating rating={review.rating} />
+                            <StarRating rating={review.rating ?? 0} />
                             <Badge variant="teal" className="text-[10px]">{review.platform}</Badge>
-                            <span className="text-[11px] text-mid ml-auto">{new Date(review.review_date).toLocaleDateString()}</span>
+                            <span className="text-[11px] text-mid ml-auto">{review.review_date ? new Date(review.review_date).toLocaleDateString() : '—'}</span>
                           </div>
                           <p className="text-[12px] text-mid leading-relaxed">{review.content || 'No review text'}</p>
                         </div>

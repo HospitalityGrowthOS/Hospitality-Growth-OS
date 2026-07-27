@@ -165,8 +165,8 @@ export default async function DashboardHome() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
                           <span className="text-[12px] font-medium text-ink">{r.author_name || 'Anonymous'}</span>
-                          <span className="text-[11px] text-gold">{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
-                          <span className="text-[10px] text-mid ml-auto">{new Date(r.review_date).toLocaleDateString()}</span>
+                          <span className="text-[11px] text-gold">{'★'.repeat(r.rating ?? 0)}{'☆'.repeat(5 - (r.rating ?? 0))}</span>
+                          <span className="text-[10px] text-mid ml-auto">{r.review_date ? new Date(r.review_date).toLocaleDateString() : '—'}</span>
                         </div>
                         <p className="text-[12px] text-mid line-clamp-2">{r.content || 'No review text'}</p>
                       </div>

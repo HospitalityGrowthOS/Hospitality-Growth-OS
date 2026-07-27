@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
         member_id:  body.member_id,
         type:       'bonus',
         points:     body.points,
+        balance_after: newBalance,
         description: body.reason,
         created_by: user.id,
       }),

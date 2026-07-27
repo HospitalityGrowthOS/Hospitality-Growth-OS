@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     const segment = campaign.target_segment as Record<string, unknown> || {}
     let query = supabase.from('guests').select('id, name, phone, loyalty_tier').eq('venue_id', campaign.venue_id).eq('whatsapp_opted_in', true)
 
-    if (segment.tier) query = query.eq('loyalty_tier', segment.tier)
+    if (segment.tier) query = query.eq('loyalty_tier', segment.tier as string)
     if (segment.min_visits) query = query.gte('total_visits', segment.min_visits as number)
     if (segment.inactive_days) {
       const cutoff = new Date(Date.now() - (segment.inactive_days as number) * 86400000).toISOString()

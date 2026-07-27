@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
       member_id: member.id,
       type: 'bonus',
       points: welcomePoints,
+      balance_after: welcomePoints,
       description: 'Welcome bonus',
     })
 

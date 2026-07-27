@@ -15,7 +15,17 @@ interface SidebarProps {
   aiBadge?: number
 }
 
-const NAV = [
+type BadgeKey = 'reviews' | 'ai'
+
+interface NavItem {
+  href: string
+  label: string
+  icon: ({ className }: { className?: string }) => JSX.Element
+  exact?: boolean
+  badgeKey?: BadgeKey
+}
+
+const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'Overview',
     items: [
@@ -27,10 +37,10 @@ const NAV = [
     section: 'Guest Systems',
     items: [
       { href: '/dashboard/visits', label: 'Visits', icon: ReceiptIcon },
-      { href: '/dashboard/reviews', label: 'Reviews', icon: StarIcon, badgeKey: 'reviews' as const },
+      { href: '/dashboard/reviews', label: 'Reviews', icon: StarIcon, badgeKey: 'reviews' },
       { href: '/dashboard/loyalty', label: 'Loyalty Members', icon: HeartIcon },
       { href: '/dashboard/whatsapp', label: 'WhatsApp', icon: WhatsAppIcon },
-      { href: '/dashboard/ai', label: 'AI Assistant', icon: ChatIcon, badgeKey: 'ai' as const },
+      { href: '/dashboard/ai', label: 'AI Assistant', icon: ChatIcon, badgeKey: 'ai' },
     ],
   },
   {
@@ -50,7 +60,7 @@ const NAV = [
 ]
 
 export default function Sidebar({ userName, userInitials, userEmail, venueName, venueInitials, planName, reviewsBadge = 0, aiBadge = 0 }: SidebarProps) {
-  const badgeCounts = { reviews: reviewsBadge, ai: aiBadge }
+  const badgeCounts: Record<BadgeKey, number> = { reviews: reviewsBadge, ai: aiBadge }
   const pathname = usePathname()
   const router = useRouter()
 

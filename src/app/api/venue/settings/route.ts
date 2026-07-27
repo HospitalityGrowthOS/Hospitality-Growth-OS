@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getCurrentVenue } from '@/lib/venue'
+import type { Database, Json } from '@/types/database'
 
 const SettingsSchema = z.object({
   name:              z.string().min(1).max(120).optional(),
@@ -30,13 +31,13 @@ export async function PATCH(req: NextRequest) {
 
   // Merge into the existing settings blob rather than replacing it, so keys we
   // don't expose in this form survive.
-  const current = (venue.settings || {}) as Record<string, unknown>
-  const settings: Record<string, unknown> = { ...current }
+  const current = (venue.settings || {}) as Record<string, Json>
+  const settings: Record<string, Json> = { ...current }
   for (const [key, value] of Object.entries(settingsFields)) {
-    if (value !== undefined) settings[key] = value
+    if (value !== undefined) settings[key] = value as Json
   }
 
-  const patch: Record<string, unknown> = { settings }
+  const patch: Database['public']['Tables']['venues']['Update'] = { settings }
   if (name !== undefined)    patch.name = name
   if (city !== undefined)    patch.city = city
   if (address !== undefined) patch.address = address
