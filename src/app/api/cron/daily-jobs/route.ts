@@ -52,7 +52,9 @@ export async function GET(req: NextRequest) {
           ),
           supabase.from('loyalty_transactions').insert({
             venue_id: venueId, member_id: m.id,
-            type: 'bonus', points: bonusPoints, description: 'Birthday bonus',
+            type: 'bonus', points: bonusPoints,
+            balance_after: m.points_balance + bonusPoints,
+            description: 'Birthday bonus',
           }),
           supabase.from('loyalty_members').update({ points_balance: m.points_balance + bonusPoints }).eq('id', m.id),
         ])
@@ -135,7 +137,24 @@ export async function GET(req: NextRequest) {
         } : thisWeek
 
         const report = await generateWeeklyReport(venue.name as string, thisWeek, lastWeek)
-        await supabase.from('weekly_reports').insert({ venue_id: venueId, report_date: new Date().toISOString().substring(0, 10), content: report, kpi_data: thisWeek })
+
+        // weekly_reports stores a week range and structured sections; an
+        // earlier version wrote report_date/content/kpi_data, none of which
+        // exist on the table, so no weekly report was ever saved.
+        const weekEnd = new Date()
+        const weekStart = new Date(weekEnd.getTime() - 6 * 24 * 60 * 60 * 1000)
+        await supabase.from('weekly_reports').insert({
+          venue_id:        venueId,
+          week_start:      weekStart.toISOString().substring(0, 10),
+          week_end:        weekEnd.toISOString().substring(0, 10),
+          summary:         report,
+          highlights:      [],
+          concerns:        [],
+          recommendations: [],
+          metrics:         thisWeek,
+          generated_at:    new Date().toISOString(),
+          model_used:      'claude',
+        })
       }
     }
 
