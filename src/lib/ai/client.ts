@@ -44,7 +44,6 @@ export interface CallOptions {
   system: string
   messages: Anthropic.MessageParam[]
   maxTokens?: number
-  temperature?: number
   feature: AiFeature
   venueId?: string
   /** Set false for high-volume internal calls that would spam the log. */
@@ -70,22 +69,27 @@ export async function callModel(opts: CallOptions): Promise<AiResult<string>> {
     const response = await client.messages.create({
       model: DEFAULT_MODEL,
       max_tokens: opts.maxTokens ?? 512,
-      ...(opts.temperature !== undefined && { temperature: opts.temperature }),
+      // No temperature: current models reject it as deprecated.
       system: opts.system,
       messages: opts.messages,
     })
 
-    const block = response.content[0]
+    // Take the first text block rather than content[0]: the model may emit a
+    // non-text block (e.g. thinking) ahead of the answer.
+    const block = response.content.find(b => b.type === 'text')
     if (!block || block.type !== 'text') {
       await logInteraction({
         feature: opts.feature,
         venueId: opts.venueId,
         latencyMs: Date.now() - started,
         success: false,
-        errorMessage: 'Model returned a non-text block',
+        errorMessage: `Model returned no text block (stop_reason: ${response.stop_reason})`,
         enabled: opts.log !== false,
       })
-      return aiFailure('invalid_response', 'Model returned an unexpected response type.')
+      return aiFailure(
+        'invalid_response',
+        `Model returned no text (stop_reason: ${response.stop_reason}).`
+      )
     }
 
     await logInteraction({

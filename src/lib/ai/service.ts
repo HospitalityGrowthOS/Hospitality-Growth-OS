@@ -111,7 +111,6 @@ export async function analyzeMessage(params: {
     system: ANALYSIS_SYSTEM,
     messages: [{ role: 'user', content: analysisUserPrompt(params.message, history) }],
     maxTokens: 300,
-    temperature: 0,
     feature: 'analyze_message',
     venueId: params.venueId,
   })
