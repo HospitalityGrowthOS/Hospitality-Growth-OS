@@ -39,6 +39,7 @@ export type AiFeature =
   | 'review_reply'
   | 'summarize_conversation'
   | 'weekly_report'
+  | 'business_insight'
 
 export interface CallOptions {
   system: string

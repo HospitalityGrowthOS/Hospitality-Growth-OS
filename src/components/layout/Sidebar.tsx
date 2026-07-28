@@ -30,7 +30,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     section: 'Overview',
     items: [
       { href: '/dashboard', label: 'Command Centre', icon: HomeIcon, exact: true },
-      { href: '/dashboard/analytics', label: 'Growth Intelligence', icon: ChartIcon },
+      { href: '/dashboard/intelligence', label: 'Growth Intelligence', icon: ChartIcon },
     ],
   },
   {
