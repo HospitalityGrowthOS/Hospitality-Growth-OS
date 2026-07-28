@@ -11,6 +11,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { tryWrite } from '@/lib/db'
 import { sendReviewRequest } from '@/lib/whatsapp-send'
 
 const BATCH_LIMIT = 50
@@ -81,10 +82,10 @@ export async function POST(req: NextRequest) {
     // Respect opt-out. Only an explicit false blocks the send; a missing guest
     // row means the request carried its own contact details.
     if (!phone || guest?.whatsapp_opted_in === false) {
-      await supabase
+      await tryWrite('review-dispatch: mark opted_out', supabase
         .from('review_requests')
         .update({ status: 'opted_out' })
-        .eq('id', request.id)
+        .eq('id', request.id))
       skipped++
       continue
     }
@@ -99,20 +100,22 @@ export async function POST(req: NextRequest) {
     })
 
     if (result.ok) {
-      await supabase
+      // If this update is lost, the next run re-sends the same message to the
+      // same guest — the log line below is the only warning of that.
+      await tryWrite(`review-dispatch: mark sent (${request.id}) — FAILURE MEANS THE GUEST MAY BE MESSAGED TWICE`, supabase
         .from('review_requests')
         .update({ status: 'sent', sent_at: new Date().toISOString() })
-        .eq('id', request.id)
+        .eq('id', request.id))
       sent++
     } else {
       // Retry transient failures on the next run; abandon anything that has
       // been failing past the staleness window.
       const stale = (request.scheduled_for ?? now) < staleBefore
       if (stale) {
-        await supabase
+        await tryWrite('review-dispatch: mark failed', supabase
           .from('review_requests')
           .update({ status: 'failed' })
-          .eq('id', request.id)
+          .eq('id', request.id))
       }
 
       console.error(

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getCurrentVenue } from '@/lib/venue'
 import { awardPoints } from '@/lib/loyalty'
+import { mustWrite, tryWrite } from '@/lib/db'
 
 const schema = z.object({
   // Accepted for backwards compatibility but never trusted — the venue always
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
     // Queue the review request — the dispatcher sends it once the delay elapses.
     const venueSettings = (venue.settings || {}) as Record<string, unknown>
     const delayMinutes = (venueSettings.review_delay_minutes as number) ?? 45
-    await supabase.from('review_requests').insert({
+    await mustWrite('visits: queue review request', supabase.from('review_requests').insert({
       venue_id:      venueId,
       guest_id:      guest.id,
       visit_id:      visit.id,
@@ -88,10 +89,10 @@ export async function POST(req: NextRequest) {
       guest_name:    guest.name || null,
       guest_phone:   guest.phone || body.guest_phone,
       scheduled_for: new Date(Date.now() + delayMinutes * 60_000).toISOString(),
-    })
+    }))
 
     // Track event
-    await supabase.from('analytics_events').insert({ venue_id: venueId, event_type: 'visit_recorded', properties: { visit_id: visit.id, spend: body.spend_amount } })
+    await tryWrite('visits: analytics event', supabase.from('analytics_events').insert({ venue_id: venueId, event_type: 'visit_recorded', properties: { visit_id: visit.id, spend: body.spend_amount } }))
 
     return NextResponse.json({ success: true, visit_id: visit.id, guest_id: guest.id })
   } catch (err) {

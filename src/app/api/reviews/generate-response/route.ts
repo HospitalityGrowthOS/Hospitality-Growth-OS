@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getCurrentVenue } from '@/lib/venue'
+import { mustWrite } from '@/lib/db'
 import { generateReviewReply } from '@/lib/ai'
 
 const schema = z.object({ review_id: z.string().uuid() })
@@ -52,10 +53,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: result.message, reason: result.reason }, { status })
     }
 
-    await admin
+    await mustWrite('generate-response: save draft', admin
       .from('reviews')
       .update({ ai_response_draft: result.data })
-      .eq('id', body.review_id)
+      .eq('id', body.review_id))
 
     return NextResponse.json({ success: true, draft: result.data })
   } catch (err) {

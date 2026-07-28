@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
+import { mustWrite } from '@/lib/db'
 import { sendLoyaltyWelcomeEmail } from '@/lib/email'
 import { sendLoyaltyWelcome as sendLoyaltyWelcomeWhatsApp } from '@/lib/whatsapp-send'
 
@@ -99,11 +100,11 @@ export async function POST(
     let guestId: string
     if (existingGuest) {
       guestId = existingGuest.id
-      await supabase.from('guests').update({
+      await mustWrite('signup: guest update', supabase.from('guests').update({
         name,
         ...(email ? { email } : {}),
         whatsapp_opted_in: true,
-      }).eq('id', guestId)
+      }).eq('id', guestId))
     } else {
       const { data: newGuest, error: guestError } = await supabase
         .from('guests')
@@ -154,8 +155,11 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to create loyalty membership' }, { status: 500 })
     }
 
-    // Welcome points transaction
-    await supabase.from('loyalty_transactions').insert({
+    // Welcome points transaction. This exact insert failed silently for three
+    // months (NOT NULL violation) while the endpoint returned 201 every time —
+    // hence the guard. A failure here surfaces; retrying lands on the
+    // already_enrolled path, which is safe.
+    await mustWrite('signup: welcome bonus ledger', supabase.from('loyalty_transactions').insert({
       venue_id:    venueId,
       member_id:   member.id,
       type:        'bonus',
@@ -163,7 +167,7 @@ export async function POST(
       balance_after: WELCOME_POINTS,
       description:   'Welcome bonus — loyalty signup',
       reference_id: member.id,
-    })
+    }))
 
     // Fire welcome email if provided — non-blocking
     if (email) {

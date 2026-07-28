@@ -7,6 +7,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { tryWrite } from '@/lib/db'
 import { sendText } from '@/lib/whatsapp'
 import { generateWeeklyReport } from '@/lib/claude'
 import { getTierEmoji } from '@/lib/utils'
@@ -143,7 +144,7 @@ export async function GET(req: NextRequest) {
         // exist on the table, so no weekly report was ever saved.
         const weekEnd = new Date()
         const weekStart = new Date(weekEnd.getTime() - 6 * 24 * 60 * 60 * 1000)
-        await supabase.from('weekly_reports').insert({
+        await tryWrite('cron: save weekly report', supabase.from('weekly_reports').insert({
           venue_id:        venueId,
           week_start:      weekStart.toISOString().substring(0, 10),
           week_end:        weekEnd.toISOString().substring(0, 10),
@@ -154,7 +155,7 @@ export async function GET(req: NextRequest) {
           metrics:         thisWeek,
           generated_at:    new Date().toISOString(),
           model_used:      'claude',
-        })
+        }))
       }
     }
 
@@ -170,12 +171,12 @@ export async function GET(req: NextRequest) {
 
     const avgRating = ratingData?.length ? +(ratingData.reduce((a, r) => a + r.rating, 0) / ratingData.length).toFixed(1) : null
 
-    await supabase.from('kpi_snapshots').upsert({
+    await tryWrite('cron: kpi snapshot', supabase.from('kpi_snapshots').upsert({
       venue_id: venueId, date: today,
       new_members: newMembers || 0,
       reviews_received: reviewsReceived || 0,
       avg_rating: avgRating,
-    }, { onConflict: 'venue_id,date' })
+    }, { onConflict: 'venue_id,date' }))
   }
 
   return NextResponse.json({ success: true, processed: venues.length, results })

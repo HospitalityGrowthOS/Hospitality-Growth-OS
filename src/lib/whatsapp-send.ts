@@ -13,6 +13,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
+import { tryWrite } from '@/lib/db'
 import { sendText } from './whatsapp'
 
 const GRAPH_API = 'https://graph.facebook.com/v21.0'
@@ -270,7 +271,9 @@ export async function logMessage(params: {
 }) {
   try {
     const supabase = getAdminClient()
-    await supabase.from('whatsapp_messages').insert({
+    // tryWrite, not a bare await: PostgREST failures resolve with { error }
+    // rather than throwing, so the catch below never fires for them.
+    await tryWrite('whatsapp: message log', supabase.from('whatsapp_messages').insert({
       venue_id:      params.venueId,
       guest_id:      params.guestId || null,
       phone:         params.phone,
@@ -279,7 +282,7 @@ export async function logMessage(params: {
       status:        params.status,
       twilio_sid:    params.providerMessageId || null,
       error_message: params.errorMessage || null,
-    })
+    }))
   } catch (err) {
     console.error('[WhatsApp] log error:', err)
   }

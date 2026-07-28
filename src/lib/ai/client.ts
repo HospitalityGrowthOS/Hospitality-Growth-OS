@@ -7,6 +7,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { createAdminClient } from '@/lib/supabase/server'
+import { tryWrite } from '@/lib/db'
 import { aiFailure, type AiResult } from './types'
 
 /**
@@ -144,7 +145,9 @@ async function logInteraction(params: LogParams): Promise<void> {
 
   try {
     const supabase = await createAdminClient()
-    await supabase.from('ai_interactions').insert({
+    // tryWrite, not a bare await: a PostgREST failure resolves with { error }
+    // instead of throwing, so the catch below never sees it.
+    await tryWrite('ai: log interaction', supabase.from('ai_interactions').insert({
       venue_id:      params.venueId ?? null,
       feature:       params.feature,
       model:         DEFAULT_MODEL,
@@ -153,7 +156,7 @@ async function logInteraction(params: LogParams): Promise<void> {
       input_tokens:  params.inputTokens ?? null,
       output_tokens: params.outputTokens ?? null,
       error_message: params.errorMessage ?? null,
-    })
+    }))
   } catch {
     // Audit logging must never take down a guest-facing reply.
   }

@@ -8,6 +8,7 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/server'
+import { tryWrite } from '@/lib/db'
 import { DEFAULT_MODEL } from '@/lib/ai'
 import type { Recommendation } from './types'
 
@@ -48,7 +49,7 @@ export async function persistRecommendations(
 
     const expiresAt = new Date(Date.now() + EXPIRES_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString()
 
-    await supabase.from('ai_recommendations').insert(
+    await tryWrite('intelligence: persist recommendations', supabase.from('ai_recommendations').insert(
       fresh.map(r => ({
         venue_id: venueId,
         type: r.type,
@@ -67,7 +68,7 @@ export async function persistRecommendations(
         model_used: `rules+${DEFAULT_MODEL}`,
         expires_at: expiresAt,
       }))
-    )
+    ))
   } catch (err) {
     // Persistence is bookkeeping — the dashboard must still render without it.
     console.error('[intelligence] could not persist recommendations:', err)

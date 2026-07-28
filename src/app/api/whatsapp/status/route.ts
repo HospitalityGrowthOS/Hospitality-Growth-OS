@@ -6,6 +6,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { tryWrite } from '@/lib/db'
 
 function getAdminClient() {
   return createClient(
@@ -39,10 +40,10 @@ export async function POST(req: NextRequest) {
     const status = STATUS_MAP[messageStatus] ?? 'sent'
 
     const supabase = getAdminClient()
-    await supabase
+    await tryWrite('whatsapp-status: delivery update', supabase
       .from('whatsapp_messages')
       .update({ status, updated_at: new Date().toISOString() })
-      .eq('twilio_sid', messageSid)
+      .eq('twilio_sid', messageSid))
 
     return new NextResponse('OK', { status: 200 })
   } catch (err) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/server'
+import { mustWrite, tryWrite } from '@/lib/db'
 import { sendText } from '@/lib/whatsapp'
 import { generateQRCode, calcLoyaltyTier } from '@/lib/utils'
 
@@ -61,16 +62,18 @@ export async function POST(req: NextRequest) {
 
     if (!member) return NextResponse.json({ error: 'Enrollment failed' }, { status: 500 })
 
-    await supabase.from('loyalty_transactions').insert({
+    // The ledger row and the balance must agree — a silent failure here is how
+    // nine members ended up holding points with no transaction history.
+    await mustWrite('enroll: welcome bonus ledger', supabase.from('loyalty_transactions').insert({
       venue_id: body.venue_id,
       member_id: member.id,
       type: 'bonus',
       points: welcomePoints,
       balance_after: welcomePoints,
       description: 'Welcome bonus',
-    })
+    }))
 
-    await supabase.from('guests').update({ loyalty_tier: 'bronze', loyalty_points: welcomePoints }).eq('id', guest.id)
+    await mustWrite('enroll: guest tier/points', supabase.from('guests').update({ loyalty_tier: 'bronze', loyalty_points: welcomePoints }).eq('id', guest.id))
 
     // Send WhatsApp welcome
     if (venue.whatsapp_phone_number_id && venue.whatsapp_access_token) {
@@ -83,7 +86,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    await supabase.from('analytics_events').insert({ venue_id: body.venue_id, event_type: 'loyalty_enrolled', properties: { member_id: member.id } })
+    await tryWrite('enroll: analytics event', supabase.from('analytics_events').insert({ venue_id: body.venue_id, event_type: 'loyalty_enrolled', properties: { member_id: member.id } }))
 
     return NextResponse.json({ success: true, member_id: member.id, qr_code: qrCode, tier: 'bronze', points: welcomePoints })
   } catch (err) {

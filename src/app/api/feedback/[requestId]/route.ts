@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { tryWrite } from '@/lib/db'
 import { z } from 'zod'
 
 const FeedbackSchema = z.object({
@@ -121,8 +122,10 @@ export async function POST(
     }
 
     // Unhappy guest → keep it private and put it in front of the owner.
+    // The feedback itself is already saved; don't fail the guest's submission
+    // over internal bookkeeping — but a lost action item must at least log.
     const guestLabel = existing.guest_name || 'A guest'
-    await admin.from('action_items').insert({
+    await tryWrite('feedback: create action item', admin.from('action_items').insert({
       venue_id:     existing.venue_id,
       title:        `${rating}★ feedback needs a response`,
       description:  feedback
@@ -133,7 +136,7 @@ export async function POST(
       status:       'pending',
       related_id:   params.requestId,
       related_type: 'review_request',
-    })
+    }))
 
     return NextResponse.json({ success: true, status, rating })
   } catch (e) {

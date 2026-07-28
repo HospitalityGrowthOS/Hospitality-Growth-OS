@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/server'
+import { mustWrite } from '@/lib/db'
 import type Stripe from 'stripe'
 
 // Required: raw body for webhook signature verification
@@ -38,10 +39,11 @@ async function upsertSubscription(
     )
 
   if (error) {
-    console.error('[webhook] upsert error:', JSON.stringify(error))
-  } else {
-    console.log('[webhook] upsert success for user_id:', data.user_id)
+    // Throwing turns this into a 500 so Stripe retries the event; swallowing
+    // it would leave the account on the wrong plan with no record of why.
+    throw new Error(`[webhook] subscription upsert failed for user ${data.user_id}: ${error.message}`)
   }
+  console.log('[webhook] upsert success for user_id:', data.user_id)
 }
 
 /**
@@ -133,10 +135,12 @@ export async function POST(request: NextRequest) {
       case 'customer.subscription.deleted': {
         const subscription = event.data.object as Stripe.Subscription
 
-        await admin
+        // A throw here becomes a 500, which makes Stripe retry the event —
+        // the correct recovery for a transient write failure.
+        await mustWrite('stripe: mark subscription canceled', admin
           .from('subscriptions')
           .update({ status: 'canceled', updated_at: new Date().toISOString() })
-          .eq('stripe_subscription_id', subscription.id)
+          .eq('stripe_subscription_id', subscription.id))
         break
       }
 
@@ -144,10 +148,10 @@ export async function POST(request: NextRequest) {
         const invoice = event.data.object as Stripe.Invoice
         const subscriptionId = subscriptionIdFromInvoice(invoice)
         if (subscriptionId) {
-          await admin
+          await mustWrite('stripe: mark subscription past_due', admin
             .from('subscriptions')
             .update({ status: 'past_due', updated_at: new Date().toISOString() })
-            .eq('stripe_subscription_id', subscriptionId)
+            .eq('stripe_subscription_id', subscriptionId))
         } else {
           console.warn('[webhook] payment_failed with no subscription on invoice', invoice.id)
         }

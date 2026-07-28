@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { tryWrite } from '@/lib/db'
 import { verifyWebhook, parsePayload, markRead, sendText, sendInteractive } from '@/lib/whatsapp'
 import {
   buildVenueContext,
@@ -93,7 +94,7 @@ async function handleButtonReply(
 
   if (buttonReplyId?.startsWith('review_google_')) {
     const requestId = buttonReplyId.replace('review_google_', '')
-    await supabase.from('review_requests').update({ status: 'clicked', clicked_at: new Date().toISOString() }).eq('id', requestId)
+    await tryWrite('whatsapp: mark review clicked (google)', supabase.from('review_requests').update({ status: 'clicked', clicked_at: new Date().toISOString() }).eq('id', requestId))
     const googleUrl = (venue.settings as Record<string, unknown>)?.google_review_url as string || 'https://search.google.com/local/writereview'
     await sendText(phoneId, token, from, `Thank you! 🙏 Here's your review link:\n${googleUrl}\n\nTakes 30 seconds and means the world to us! ⭐`)
     return
@@ -101,7 +102,7 @@ async function handleButtonReply(
 
   if (buttonReplyId?.startsWith('review_feedback_')) {
     const requestId = buttonReplyId.replace('review_feedback_', '')
-    await supabase.from('review_requests').update({ status: 'clicked', clicked_at: new Date().toISOString() }).eq('id', requestId)
+    await tryWrite('whatsapp: mark review clicked (feedback)', supabase.from('review_requests').update({ status: 'clicked', clicked_at: new Date().toISOString() }).eq('id', requestId))
     await sendText(phoneId, token, from, `Thank you! We really value your feedback. 💬\n\nPlease share your thoughts — what did you enjoy, and is there anything we could improve?`)
   }
 }
@@ -182,7 +183,8 @@ async function handleTextMessage(
 
   // Store the guest's message either way — losing it because the assistant
   // was unavailable would leave the team with no record of what was asked.
-  await supabase.from('messages').insert({
+  // Logged, not thrown: a history-write failure must not stop the reply.
+  await tryWrite('whatsapp: store guest message', supabase.from('messages').insert({
     conversation_id: conversation.id,
     venue_id: venueId,
     role: 'user',
@@ -192,7 +194,7 @@ async function handleTextMessage(
     metadata: {},
     intent: result.ok ? result.data.intent : null,
     sentiment: result.ok ? result.data.sentiment : null,
-  })
+  }))
 
   if (!result.ok) {
     // No assistant available: hand the guest to a person rather than ignoring them.
@@ -211,7 +213,7 @@ async function handleTextMessage(
 
   const reply = result.data
 
-  await supabase.from('messages').insert({
+  await tryWrite('whatsapp: store assistant message', supabase.from('messages').insert({
     conversation_id: conversation.id,
     venue_id: venueId,
     role: 'assistant',
@@ -220,7 +222,7 @@ async function handleTextMessage(
     metadata: { model: DEFAULT_MODEL },
     intent: reply.intent,
     sentiment: reply.sentiment,
-  })
+  }))
 
   await sendText(phoneId, token, msg.from, reply.message)
 

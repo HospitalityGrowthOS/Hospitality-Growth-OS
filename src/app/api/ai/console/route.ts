@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getCurrentVenue } from '@/lib/venue'
+import { mustWrite } from '@/lib/db'
 import {
   buildVenueContext,
   captureReservationRequest,
@@ -119,7 +120,7 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString()
 
     // Store the inbound turn regardless of the outcome.
-    await supabase.from('messages').insert({
+    await mustWrite('console: store user message', supabase.from('messages').insert({
       conversation_id: conversationId,
       venue_id: venueId,
       role: 'user',
@@ -128,7 +129,7 @@ export async function POST(req: NextRequest) {
       metadata: { source: 'console' },
       intent: result.ok ? result.data.intent : null,
       sentiment: result.ok ? result.data.sentiment : null,
-    })
+    }))
 
     if (!result.ok) {
       return NextResponse.json(
@@ -145,7 +146,7 @@ export async function POST(req: NextRequest) {
 
     const reply = result.data
 
-    await supabase.from('messages').insert({
+    await mustWrite('console: store assistant message', supabase.from('messages').insert({
       conversation_id: conversationId,
       venue_id: venueId,
       role: 'assistant',
@@ -154,7 +155,7 @@ export async function POST(req: NextRequest) {
       metadata: { model: DEFAULT_MODEL, source: 'console' },
       intent: reply.intent,
       sentiment: reply.sentiment,
-    })
+    }))
 
     // The console runs the real pipeline, so a reservation mentioned here is
     // captured exactly as it would be from WhatsApp.

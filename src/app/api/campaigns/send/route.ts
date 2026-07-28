@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient } from '@/lib/supabase/server'
 import { getCurrentVenue } from '@/lib/venue'
+import { mustWrite, tryWrite } from '@/lib/db'
 import { sendText } from '@/lib/whatsapp'
 
 const schema = z.object({ campaign_id: z.string().uuid() })
@@ -45,8 +46,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Venue has no WhatsApp configured' }, { status: 400 })
     }
 
-    // Mark as running
-    await supabase.from('campaigns').update({ status: 'running' }).eq('id', campaign_id)
+    // Mark as running BEFORE any message goes out. If this fails, abort — a
+    // campaign that cannot record its own state must not start sending.
+    await mustWrite('campaigns: mark running', supabase.from('campaigns').update({ status: 'running' }).eq('id', campaign_id))
 
     // Build guest segment
     const segment = campaign.target_segment as Record<string, unknown> || {}
@@ -63,7 +65,7 @@ export async function POST(req: NextRequest) {
 
     const { data: guests } = await query
     if (!guests?.length) {
-      await supabase.from('campaigns').update({ status: 'completed' }).eq('id', campaign_id)
+      await mustWrite('campaigns: mark completed (empty segment)', supabase.from('campaigns').update({ status: 'completed' }).eq('id', campaign_id))
       return NextResponse.json({ sent: 0, message: 'No matching guests' })
     }
 
@@ -85,16 +87,16 @@ export async function POST(req: NextRequest) {
 
         try {
           await sendText(venue.whatsapp_phone_number_id as string, venue.whatsapp_access_token as string, guest.phone, message)
-          await supabase.from('campaign_sends').insert({
+          await tryWrite('campaigns: record send', supabase.from('campaign_sends').insert({
             campaign_id, venue_id: campaign.venue_id, guest_id: guest.id,
             status: 'sent', sent_at: new Date().toISOString(),
-          })
+          }))
           sent++
         } catch {
-          await supabase.from('campaign_sends').insert({
+          await tryWrite('campaigns: record failed send', supabase.from('campaign_sends').insert({
             campaign_id, venue_id: campaign.venue_id, guest_id: guest.id,
             status: 'failed', error_message: 'WhatsApp delivery failed',
-          })
+          }))
           failed++
         }
       }))
@@ -103,12 +105,14 @@ export async function POST(req: NextRequest) {
       if (i + BATCH_SIZE < guests.length) await sleep(DELAY_MS)
     }
 
-    await supabase.from('campaigns').update({
+    // Messages are already out, so log rather than throw — a 500 here would
+    // read as "campaign failed" when it actually sent.
+    const closed = await tryWrite('campaigns: mark completed', supabase.from('campaigns').update({
       status: 'completed',
       sent_count: sent,
-    }).eq('id', campaign_id)
+    }).eq('id', campaign_id))
 
-    return NextResponse.json({ success: true, sent, failed, total: guests.length })
+    return NextResponse.json({ success: true, sent, failed, total: guests.length, status_recorded: closed })
   } catch (err) {
     if (err instanceof z.ZodError) return NextResponse.json({ error: err.errors }, { status: 400 })
     console.error('campaign send error:', err)
