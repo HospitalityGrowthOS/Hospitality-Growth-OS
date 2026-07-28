@@ -175,7 +175,12 @@ export interface AssistantReply {
 
 // ── Channels ──────────────────────────────────────────────────────────────────
 
-export type ChannelName = 'whatsapp' | 'email' | 'web' | 'voice' | 'n8n'
+/**
+ * Mirrors the `conversation_channel` enum in Postgres, which is the source of
+ * truth. Adding a channel (email, n8n) means extending that enum first —
+ * otherwise a conversation cannot be stored against it.
+ */
+export type ChannelName = 'whatsapp' | 'instagram' | 'website' | 'phone'
 
 export interface OutboundMessage {
   to: string

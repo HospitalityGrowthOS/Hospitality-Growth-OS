@@ -39,6 +39,13 @@ defs = spec['definitions']
 
 
 def ts_type(prop):
+    # Postgres enums arrive with an explicit value list. Emitting them as a
+    # union rather than `string` is what makes an invalid value a compile
+    # error instead of a runtime 22P02.
+    values = prop.get('enum')
+    if values:
+        return ' | '.join(f"'{v}'" for v in values)
+
     fmt = prop.get('format', '')
     t = prop.get('type', 'string')
     if fmt in ('integer', 'bigint', 'smallint', 'numeric', 'real', 'double precision'):

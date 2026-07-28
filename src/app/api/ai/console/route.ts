@@ -24,8 +24,8 @@ const schema = z.object({
  *
  * Runs the identical path WhatsApp uses — same analysis, same prompts, same
  * escalation rules — and stores the exchange as a real conversation on the
- * `web` channel. Testing here therefore exercises the production code, and the
- * transcript shows up in Conversation History alongside every other channel.
+ * `website` channel. Testing here therefore exercises production code, and the
+ * transcript appears in Conversation History alongside every other channel.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
         .insert({
           venue_id: venueId,
           guest_id: guest?.id ?? null,
-          channel: 'web',
+          channel: 'website',
           status: 'open',
           ai_handled: true,
           context: { source: 'console' },
@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
         guestPhone: null,
         details: reply.reservation,
         sourceMessage: body.message,
-        channel: 'web',
+        channel: 'website',
       })
     }
 

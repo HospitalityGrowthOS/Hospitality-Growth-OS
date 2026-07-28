@@ -9,7 +9,7 @@ import { INTENTS, INTENT_LABELS, SENTIMENTS, isIntent, type Intent, type Sentime
 import ConversationFilters from './ConversationFilters'
 import Transcript from './Transcript'
 
-const CHANNELS = ['whatsapp', 'web', 'email', 'voice'] as const
+const CHANNELS = ['whatsapp', 'website', 'instagram', 'phone'] as const
 
 interface SearchParams {
   channel?: string
@@ -84,7 +84,10 @@ export default async function ConversationsPage({
     .order('created_at', { ascending: false })
     .limit(50)
 
-  if (searchParams.channel) query = query.eq('channel', searchParams.channel)
+  // Only accept a channel the enum actually defines, so a hand-edited URL
+  // cannot produce a 22P02 from the database.
+  const channelFilter = CHANNELS.find(c => c === searchParams.channel)
+  if (channelFilter) query = query.eq('channel', channelFilter)
   if (searchParams.status === 'escalated') query = query.eq('status', 'escalated')
   if (searchParams.status === 'open') query = query.eq('status', 'open')
   if (conversationIdFilter) {
@@ -185,7 +188,7 @@ export default async function ConversationsPage({
                         )}
                       </td>
                       <td className="px-5 py-3">
-                        <Badge variant={c.channel === 'web' ? 'default' : 'teal'}>{c.channel}</Badge>
+                        <Badge variant={c.channel === 'website' ? 'default' : 'teal'}>{c.channel}</Badge>
                       </td>
                       <td className="px-5 py-3">
                         <Badge

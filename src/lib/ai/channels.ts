@@ -45,11 +45,10 @@ function plannedChannel(name: ChannelName): ChannelAdapter {
 }
 
 const ADAPTERS: Record<ChannelName, ChannelAdapter> = {
-  whatsapp: whatsappAdapter,
-  email:    plannedChannel('email'),
-  web:      plannedChannel('web'),
-  voice:    plannedChannel('voice'),
-  n8n:      plannedChannel('n8n'),
+  whatsapp:  whatsappAdapter,
+  instagram: plannedChannel('instagram'),
+  website:   plannedChannel('website'),
+  phone:     plannedChannel('phone'),
 }
 
 export function getChannel(name: ChannelName): ChannelAdapter {

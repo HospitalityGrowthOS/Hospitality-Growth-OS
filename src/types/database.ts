@@ -17,8 +17,8 @@ export interface Database {
           title: string
           description: string | null
           type: string
-          priority: string
-          status: string
+          priority: 'urgent' | 'high' | 'medium' | 'low'
+          status: 'pending' | 'done' | 'dismissed' | 'in_progress'
           due_at: string | null
           completed_at: string | null
           completed_by: string | null
@@ -33,8 +33,8 @@ export interface Database {
           title: string
           description?: string | null
           type: string
-          priority?: string
-          status?: string
+          priority?: 'urgent' | 'high' | 'medium' | 'low'
+          status?: 'pending' | 'done' | 'dismissed' | 'in_progress'
           due_at?: string | null
           completed_at?: string | null
           completed_by?: string | null
@@ -49,8 +49,8 @@ export interface Database {
           title?: string
           description?: string | null
           type?: string
-          priority?: string
-          status?: string
+          priority?: 'urgent' | 'high' | 'medium' | 'low'
+          status?: 'pending' | 'done' | 'dismissed' | 'in_progress'
           due_at?: string | null
           completed_at?: string | null
           completed_by?: string | null
@@ -130,8 +130,8 @@ export interface Database {
           type: string
           title: string
           description: string
-          priority: string
-          status: string
+          priority: 'high' | 'medium' | 'low'
+          status: 'pending' | 'actioned' | 'dismissed' | 'snoozed'
           data: Json
           generated_at: string
           model_used: string | null
@@ -147,8 +147,8 @@ export interface Database {
           type: string
           title: string
           description: string
-          priority?: string
-          status?: string
+          priority?: 'high' | 'medium' | 'low'
+          status?: 'pending' | 'actioned' | 'dismissed' | 'snoozed'
           data: Json
           generated_at?: string
           model_used?: string | null
@@ -164,8 +164,8 @@ export interface Database {
           type?: string
           title?: string
           description?: string
-          priority?: string
-          status?: string
+          priority?: 'high' | 'medium' | 'low'
+          status?: 'pending' | 'actioned' | 'dismissed' | 'snoozed'
           data?: Json
           generated_at?: string
           model_used?: string | null
@@ -252,7 +252,7 @@ export interface Database {
           campaign_id: string
           venue_id: string
           guest_id: string
-          status: string
+          status: 'pending' | 'sent' | 'delivered' | 'read' | 'clicked' | 'converted' | 'failed' | 'bounced'
           error_message: string | null
           sent_at: string | null
           delivered_at: string | null
@@ -269,7 +269,7 @@ export interface Database {
           campaign_id: string
           venue_id: string
           guest_id: string
-          status?: string
+          status?: 'pending' | 'sent' | 'delivered' | 'read' | 'clicked' | 'converted' | 'failed' | 'bounced'
           error_message?: string | null
           sent_at?: string | null
           delivered_at?: string | null
@@ -286,7 +286,7 @@ export interface Database {
           campaign_id?: string
           venue_id?: string
           guest_id?: string
-          status?: string
+          status?: 'pending' | 'sent' | 'delivered' | 'read' | 'clicked' | 'converted' | 'failed' | 'bounced'
           error_message?: string | null
           sent_at?: string | null
           delivered_at?: string | null
@@ -328,9 +328,9 @@ export interface Database {
           venue_id: string
           created_by: string | null
           name: string
-          type: string
-          channel: string
-          status: string
+          type: 'promotional' | 'loyalty' | 'winback' | 'birthday' | 'review_request' | 'announcement'
+          channel: 'whatsapp' | 'email' | 'sms'
+          status: 'draft' | 'scheduled' | 'running' | 'completed' | 'paused' | 'cancelled'
           target_segment: Json
           message_template: string
           media_url: string | null
@@ -353,9 +353,9 @@ export interface Database {
           venue_id: string
           created_by?: string | null
           name: string
-          type: string
-          channel?: string
-          status?: string
+          type: 'promotional' | 'loyalty' | 'winback' | 'birthday' | 'review_request' | 'announcement'
+          channel?: 'whatsapp' | 'email' | 'sms'
+          status?: 'draft' | 'scheduled' | 'running' | 'completed' | 'paused' | 'cancelled'
           target_segment: Json
           message_template: string
           media_url?: string | null
@@ -378,9 +378,9 @@ export interface Database {
           venue_id?: string
           created_by?: string | null
           name?: string
-          type?: string
-          channel?: string
-          status?: string
+          type?: 'promotional' | 'loyalty' | 'winback' | 'birthday' | 'review_request' | 'announcement'
+          channel?: 'whatsapp' | 'email' | 'sms'
+          status?: 'draft' | 'scheduled' | 'running' | 'completed' | 'paused' | 'cancelled'
           target_segment?: Json
           message_template?: string
           media_url?: string | null
@@ -420,8 +420,8 @@ export interface Database {
           id: string
           venue_id: string
           guest_id: string | null
-          channel: string
-          status: string
+          channel: 'whatsapp' | 'instagram' | 'website' | 'phone'
+          status: 'open' | 'resolved' | 'escalated' | 'pending'
           ai_handled: boolean
           human_takeover_at: string | null
           human_assigned_to: string | null
@@ -436,8 +436,8 @@ export interface Database {
           id?: string
           venue_id: string
           guest_id?: string | null
-          channel?: string
-          status?: string
+          channel?: 'whatsapp' | 'instagram' | 'website' | 'phone'
+          status?: 'open' | 'resolved' | 'escalated' | 'pending'
           ai_handled?: boolean
           human_takeover_at?: string | null
           human_assigned_to?: string | null
@@ -452,8 +452,8 @@ export interface Database {
           id?: string
           venue_id?: string
           guest_id?: string | null
-          channel?: string
-          status?: string
+          channel?: 'whatsapp' | 'instagram' | 'website' | 'phone'
+          status?: 'open' | 'resolved' | 'escalated' | 'pending'
           ai_handled?: boolean
           human_takeover_at?: string | null
           human_assigned_to?: string | null
@@ -495,7 +495,7 @@ export interface Database {
           name: string | null
           phone: string | null
           email: string | null
-          loyalty_tier: string | null
+          loyalty_tier: 'none' | 'bronze' | 'silver' | 'gold' | null
           loyalty_points: number | null
           total_visits: number | null
           total_spent: number | null
@@ -514,7 +514,7 @@ export interface Database {
           name?: string | null
           phone?: string | null
           email?: string | null
-          loyalty_tier?: string | null
+          loyalty_tier?: 'none' | 'bronze' | 'silver' | 'gold' | null
           loyalty_points?: number | null
           total_visits?: number | null
           total_spent?: number | null
@@ -533,7 +533,7 @@ export interface Database {
           name?: string | null
           phone?: string | null
           email?: string | null
-          loyalty_tier?: string | null
+          loyalty_tier?: 'none' | 'bronze' | 'silver' | 'gold' | null
           loyalty_points?: number | null
           total_visits?: number | null
           total_spent?: number | null
@@ -568,7 +568,7 @@ export interface Database {
           notes: string | null
           whatsapp_opted_in: boolean
           whatsapp_opted_in_at: string | null
-          loyalty_tier: string
+          loyalty_tier: 'none' | 'bronze' | 'silver' | 'gold'
           loyalty_points: number
           total_visits: number
           total_spent: number
@@ -590,7 +590,7 @@ export interface Database {
           notes?: string | null
           whatsapp_opted_in?: boolean
           whatsapp_opted_in_at?: string | null
-          loyalty_tier?: string
+          loyalty_tier?: 'none' | 'bronze' | 'silver' | 'gold'
           loyalty_points?: number
           total_visits?: number
           total_spent?: number
@@ -612,7 +612,7 @@ export interface Database {
           notes?: string | null
           whatsapp_opted_in?: boolean
           whatsapp_opted_in_at?: string | null
-          loyalty_tier?: string
+          loyalty_tier?: 'none' | 'bronze' | 'silver' | 'gold'
           loyalty_points?: number
           total_visits?: number
           total_spent?: number
@@ -729,9 +729,9 @@ export interface Database {
           email: string | null
           city: string | null
           country: string
-          plan_interest: string | null
-          source: string
-          status: string
+          plan_interest: 'starter' | 'growth' | 'scale' | null
+          source: 'outbound' | 'inbound' | 'referral' | 'linkedin' | 'cold_email' | 'event' | 'website'
+          status: 'new' | 'contacted' | 'demo_scheduled' | 'proposal_sent' | 'won' | 'lost' | 'nurturing'
           notes: string | null
           assigned_to: string | null
           last_contacted_at: string | null
@@ -754,9 +754,9 @@ export interface Database {
           email?: string | null
           city?: string | null
           country?: string
-          plan_interest?: string | null
-          source?: string
-          status?: string
+          plan_interest?: 'starter' | 'growth' | 'scale' | null
+          source?: 'outbound' | 'inbound' | 'referral' | 'linkedin' | 'cold_email' | 'event' | 'website'
+          status?: 'new' | 'contacted' | 'demo_scheduled' | 'proposal_sent' | 'won' | 'lost' | 'nurturing'
           notes?: string | null
           assigned_to?: string | null
           last_contacted_at?: string | null
@@ -779,9 +779,9 @@ export interface Database {
           email?: string | null
           city?: string | null
           country?: string
-          plan_interest?: string | null
-          source?: string
-          status?: string
+          plan_interest?: 'starter' | 'growth' | 'scale' | null
+          source?: 'outbound' | 'inbound' | 'referral' | 'linkedin' | 'cold_email' | 'event' | 'website'
+          status?: 'new' | 'contacted' | 'demo_scheduled' | 'proposal_sent' | 'won' | 'lost' | 'nurturing'
           notes?: string | null
           assigned_to?: string | null
           last_contacted_at?: string | null
@@ -818,7 +818,7 @@ export interface Database {
           venue_id: string
           guest_id: string
           qr_code: string
-          tier: string
+          tier: 'none' | 'bronze' | 'silver' | 'gold'
           points_balance: number
           points_earned_total: number
           points_redeemed_total: number
@@ -834,7 +834,7 @@ export interface Database {
           venue_id: string
           guest_id: string
           qr_code?: string
-          tier?: string
+          tier?: 'none' | 'bronze' | 'silver' | 'gold'
           points_balance?: number
           points_earned_total?: number
           points_redeemed_total?: number
@@ -850,7 +850,7 @@ export interface Database {
           venue_id?: string
           guest_id?: string
           qr_code?: string
-          tier?: string
+          tier?: 'none' | 'bronze' | 'silver' | 'gold'
           points_balance?: number
           points_earned_total?: number
           points_redeemed_total?: number
@@ -885,7 +885,7 @@ export interface Database {
           name: string
           description: string | null
           points_cost: number
-          type: string
+          type: 'discount' | 'free_item' | 'experience'
           is_active: boolean
           valid_until: string | null
           stock_limit: number | null
@@ -900,7 +900,7 @@ export interface Database {
           name: string
           description?: string | null
           points_cost: number
-          type?: string
+          type?: 'discount' | 'free_item' | 'experience'
           is_active?: boolean
           valid_until?: string | null
           stock_limit?: number | null
@@ -915,7 +915,7 @@ export interface Database {
           name?: string
           description?: string | null
           points_cost?: number
-          type?: string
+          type?: 'discount' | 'free_item' | 'experience'
           is_active?: boolean
           valid_until?: string | null
           stock_limit?: number | null
@@ -939,7 +939,7 @@ export interface Database {
           id: string
           venue_id: string
           member_id: string
-          type: string
+          type: 'earn' | 'redeem' | 'bonus' | 'expire'
           points: number
           balance_after: number
           description: string
@@ -953,7 +953,7 @@ export interface Database {
           id?: string
           venue_id: string
           member_id: string
-          type: string
+          type: 'earn' | 'redeem' | 'bonus' | 'expire'
           points: number
           balance_after: number
           description: string
@@ -967,7 +967,7 @@ export interface Database {
           id?: string
           venue_id?: string
           member_id?: string
-          type?: string
+          type?: 'earn' | 'redeem' | 'bonus' | 'expire'
           points?: number
           balance_after?: number
           description?: string
@@ -1006,7 +1006,7 @@ export interface Database {
           id: string
           conversation_id: string
           venue_id: string
-          role: string
+          role: 'user' | 'assistant' | 'system'
           content: string
           channel_message_id: string | null
           sent_at: string | null
@@ -1024,7 +1024,7 @@ export interface Database {
           id?: string
           conversation_id: string
           venue_id: string
-          role: string
+          role: 'user' | 'assistant' | 'system'
           content: string
           channel_message_id?: string | null
           sent_at?: string | null
@@ -1042,7 +1042,7 @@ export interface Database {
           id?: string
           conversation_id?: string
           venue_id?: string
-          role?: string
+          role?: 'user' | 'assistant' | 'system'
           content?: string
           channel_message_id?: string | null
           sent_at?: string | null
@@ -1143,7 +1143,7 @@ export interface Database {
         Row: {
           id: string
           venue_id: string | null
-          role: string
+          role: 'owner' | 'manager' | 'staff'
           full_name: string
           email: string
           avatar_url: string | null
@@ -1156,7 +1156,7 @@ export interface Database {
         Insert: {
           id: string
           venue_id?: string | null
-          role?: string
+          role?: 'owner' | 'manager' | 'staff'
           full_name: string
           email: string
           avatar_url?: string | null
@@ -1169,7 +1169,7 @@ export interface Database {
         Update: {
           id?: string
           venue_id?: string | null
-          role?: string
+          role?: 'owner' | 'manager' | 'staff'
           full_name?: string
           email?: string
           avatar_url?: string | null
@@ -1331,12 +1331,12 @@ export interface Database {
           id: string
           venue_id: string
           guest_id: string | null
-          platform: string
+          platform: 'google' | 'tripadvisor' | 'yelp' | 'internal'
           rating: number
           content: string | null
           author_name: string | null
           review_date: string | null
-          status: string
+          status: 'pending' | 'responded' | 'ignored' | 'flagged'
           ai_response_draft: string | null
           owner_response: string | null
           responded_at: string | null
@@ -1349,12 +1349,12 @@ export interface Database {
           id?: string
           venue_id: string
           guest_id?: string | null
-          platform?: string
+          platform?: 'google' | 'tripadvisor' | 'yelp' | 'internal'
           rating: number
           content?: string | null
           author_name?: string | null
           review_date?: string | null
-          status?: string
+          status?: 'pending' | 'responded' | 'ignored' | 'flagged'
           ai_response_draft?: string | null
           owner_response?: string | null
           responded_at?: string | null
@@ -1367,12 +1367,12 @@ export interface Database {
           id?: string
           venue_id?: string
           guest_id?: string | null
-          platform?: string
+          platform?: 'google' | 'tripadvisor' | 'yelp' | 'internal'
           rating?: number
           content?: string | null
           author_name?: string | null
           review_date?: string | null
-          status?: string
+          status?: 'pending' | 'responded' | 'ignored' | 'flagged'
           ai_response_draft?: string | null
           owner_response?: string | null
           responded_at?: string | null
@@ -1483,9 +1483,9 @@ export interface Database {
           id: string
           name: string
           slug: string
-          type: string
-          plan: string
-          status: string
+          type: 'restaurant' | 'cafe' | 'bar' | 'hotel' | 'bakery'
+          plan: 'starter' | 'growth' | 'scale'
+          status: 'trial' | 'active' | 'past_due' | 'cancelled' | 'paused'
           phone: string | null
           email: string | null
           address: string | null
@@ -1510,9 +1510,9 @@ export interface Database {
           id?: string
           name: string
           slug: string
-          type?: string
-          plan?: string
-          status?: string
+          type?: 'restaurant' | 'cafe' | 'bar' | 'hotel' | 'bakery'
+          plan?: 'starter' | 'growth' | 'scale'
+          status?: 'trial' | 'active' | 'past_due' | 'cancelled' | 'paused'
           phone?: string | null
           email?: string | null
           address?: string | null
@@ -1537,9 +1537,9 @@ export interface Database {
           id?: string
           name?: string
           slug?: string
-          type?: string
-          plan?: string
-          status?: string
+          type?: 'restaurant' | 'cafe' | 'bar' | 'hotel' | 'bakery'
+          plan?: 'starter' | 'growth' | 'scale'
+          status?: 'trial' | 'active' | 'past_due' | 'cancelled' | 'paused'
           phone?: string | null
           email?: string | null
           address?: string | null
@@ -1572,7 +1572,7 @@ export interface Database {
           party_size: number
           spend_amount: number | null
           table_number: string | null
-          source: string
+          source: 'walkin' | 'reservation' | 'delivery' | 'online'
           pos_receipt_id: string | null
           notes: string | null
           created_at: string
@@ -1587,7 +1587,7 @@ export interface Database {
           party_size?: number
           spend_amount?: number | null
           table_number?: string | null
-          source?: string
+          source?: 'walkin' | 'reservation' | 'delivery' | 'online'
           pos_receipt_id?: string | null
           notes?: string | null
           created_at?: string
@@ -1602,7 +1602,7 @@ export interface Database {
           party_size?: number
           spend_amount?: number | null
           table_number?: string | null
-          source?: string
+          source?: 'walkin' | 'reservation' | 'delivery' | 'online'
           pos_receipt_id?: string | null
           notes?: string | null
           created_at?: string
