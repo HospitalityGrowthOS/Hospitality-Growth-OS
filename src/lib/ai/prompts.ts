@@ -5,7 +5,29 @@
  * stops prompt fragments accumulating inside route handlers.
  */
 
-import { INTENTS, SENTIMENTS, type GuestContext, type Intent, type VenueContext } from './types'
+import {
+  INTENTS,
+  SENTIMENTS,
+  type GuestContext,
+  type Intent,
+  type ReplyLength,
+  type Tone,
+  type VenueContext,
+} from './types'
+
+/** How each tone setting is described to the model. */
+const TONE_DIRECTION: Record<Tone, string> = {
+  warm:         'Warm and welcoming, the way a good host speaks.',
+  professional: 'Polished and courteous, without being stiff.',
+  casual:       'Relaxed and conversational, like a friendly local spot.',
+  refined:      'Understated and formal, suited to fine dining.',
+}
+
+const LENGTH_DIRECTION: Record<ReplyLength, string> = {
+  brief:    'One or two short sentences.',
+  standard: 'Two or three sentences.',
+  detailed: 'Up to four sentences when the question genuinely needs it.',
+}
 
 /** Facts the assistant may state, rendered as plain lines. */
 function venueFacts(venue: VenueContext): string {
@@ -89,6 +111,7 @@ export function guestReplySystem(
   intent: Intent
 ): string {
   const guidance = INTENT_GUIDANCE[intent]
+  const { tone, length, houseRules } = venue.config
 
   return `You are ${venue.assistantName}, the assistant for ${venue.name}.
 
@@ -97,11 +120,13 @@ ${venueFacts(venue)}${guestFacts(guest)}
 
 How to reply:
 - Write in the same language the guest used.
-- Two or three sentences. Warm, natural, never salesy.
+- ${TONE_DIRECTION[tone]}
+- ${LENGTH_DIRECTION[length]}
+- Never salesy.
 - Only state facts listed above. If you do not know something, say the team will confirm — never invent hours, prices, menu items or availability.
 - Do not promise bookings, refunds, discounts or compensation.
-- No greetings like "Dear guest"; write the way a friendly host speaks.
-${guidance ? `\nFor this message specifically: ${guidance}` : ''}
+- No greetings like "Dear guest"; write the way a good host speaks.
+${guidance ? `\nFor this message specifically: ${guidance}` : ''}${houseRules ? `\n\nHouse rules set by the owner:\n${houseRules}` : ''}
 
 Reply with the message text only.`
 }

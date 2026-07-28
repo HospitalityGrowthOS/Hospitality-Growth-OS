@@ -13,33 +13,69 @@
  * and no change here.
  */
 
-import type { VenueContext } from './types'
+import {
+  DEFAULT_ASSISTANT_CONFIG,
+  isReplyLength,
+  isTone,
+  type AssistantConfig,
+  type VenueContext,
+} from './types'
 
-/** Topics the assistant knows how to talk about. */
+/**
+ * Knowledge topics the assistant can speak to.
+ *
+ * Adding a topic here is the only change needed — the Knowledge Base UI renders
+ * from this list, and the resolver picks it up automatically.
+ */
 export const FAQ_TOPICS = [
+  'restaurant_info',
   'opening_hours',
   'address',
   'parking',
-  'wifi',
+  'reservations',
   'menu',
   'allergens',
-  'reservations',
   'payment',
   'accessibility',
+  'wifi',
+  'delivery',
+  'events',
+  'custom',
 ] as const
 
 export type FaqTopic = (typeof FAQ_TOPICS)[number]
 
 export const FAQ_TOPIC_LABELS: Record<FaqTopic, string> = {
-  opening_hours: 'Opening hours',
-  address:       'Address',
-  parking:       'Parking',
-  wifi:          'WiFi',
-  menu:          'Menu',
-  allergens:     'Allergens',
-  reservations:  'Reservations',
-  payment:       'Payment methods',
-  accessibility: 'Accessibility',
+  restaurant_info: 'Restaurant information',
+  opening_hours:   'Opening hours',
+  address:         'Address',
+  parking:         'Parking',
+  reservations:    'Reservations',
+  menu:            'Menu',
+  allergens:       'Allergens',
+  payment:         'Payment methods',
+  accessibility:   'Accessibility',
+  wifi:            'Wi-Fi',
+  delivery:        'Delivery and takeaway',
+  events:          'Events and private hire',
+  custom:          'Anything else',
+}
+
+/** Guidance shown beside each field in the Knowledge Base editor. */
+export const FAQ_TOPIC_HINTS: Record<FaqTopic, string> = {
+  restaurant_info: 'What kind of place this is, the style of food, the atmosphere.',
+  opening_hours:   'Filled in automatically from your opening hours, or override here.',
+  address:         'Filled in automatically from your venue address, or add directions.',
+  parking:         'Nearby car parks, street parking, how far away.',
+  reservations:    'How guests book, how far ahead, minimum group size.',
+  menu:            'A link to your menu, or the dishes you are known for.',
+  allergens:       'How you handle allergies. The assistant always defers to your team on specifics.',
+  payment:         'Cards accepted, cash only, tipping.',
+  accessibility:   'Step-free access, accessible toilets, space for a wheelchair.',
+  wifi:            'Whether there is guest Wi-Fi and how to get on it.',
+  delivery:        'Whether you deliver, which platforms, the area you cover.',
+  events:          'Private hire, large groups, set menus.',
+  custom:          'Anything else guests often ask that does not fit above.',
 }
 
 /** Shape of a venue row as far as the FAQ layer is concerned. */
@@ -96,6 +132,7 @@ export function resolveFaq(venue: VenueLike): Record<string, string> {
   const faq: Record<string, string> = {}
 
   const derived: Partial<Record<FaqTopic, string | null>> = {
+    restaurant_info: venue.type ? `A ${venue.type}` : null,
     opening_hours: renderOpeningHours(settings),
     address: venue.address
       ? [venue.address, venue.city].filter(Boolean).join(', ')
@@ -119,6 +156,26 @@ export function missingFaqTopics(venue: VenueLike): FaqTopic[] {
   return FAQ_TOPICS.filter(topic => !(FAQ_TOPIC_LABELS[topic] in resolved))
 }
 
+/** Reads owner-set voice settings, falling back to defaults for anything unset. */
+export function resolveAssistantConfig(venue: VenueLike): AssistantConfig {
+  const settings = readSettings(venue)
+  const raw = (settings.ai && typeof settings.ai === 'object'
+    ? settings.ai
+    : {}) as Record<string, unknown>
+
+  return {
+    tone: typeof raw.tone === 'string' && isTone(raw.tone)
+      ? raw.tone
+      : DEFAULT_ASSISTANT_CONFIG.tone,
+    length: typeof raw.length === 'string' && isReplyLength(raw.length)
+      ? raw.length
+      : DEFAULT_ASSISTANT_CONFIG.length,
+    houseRules: typeof raw.house_rules === 'string' && raw.house_rules.trim()
+      ? raw.house_rules.trim()
+      : null,
+  }
+}
+
 /** Assembles the context object the prompts consume. */
 export function buildVenueContext(venue: VenueLike): VenueContext {
   const settings = readSettings(venue)
@@ -135,5 +192,6 @@ export function buildVenueContext(venue: VenueLike): VenueContext {
     address: venue.address ?? null,
     assistantName,
     faq:     resolveFaq(venue),
+    config:  resolveAssistantConfig(venue),
   }
 }

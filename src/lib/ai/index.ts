@@ -9,8 +9,10 @@ export { isAiConfigured, DEFAULT_MODEL, type AiFeature } from './client'
 export {
   FAQ_TOPICS,
   FAQ_TOPIC_LABELS,
+  FAQ_TOPIC_HINTS,
   resolveFaq,
   missingFaqTopics,
+  resolveAssistantConfig,
   buildVenueContext,
   type FaqTopic,
   type VenueLike,

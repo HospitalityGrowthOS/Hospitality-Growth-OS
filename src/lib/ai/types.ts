@@ -92,6 +92,48 @@ export interface MessageAnalysis {
   reservation: ReservationDetails | null
 }
 
+// ── Assistant configuration ───────────────────────────────────────────────────
+
+export const TONES = ['warm', 'professional', 'casual', 'refined'] as const
+export type Tone = (typeof TONES)[number]
+
+export const REPLY_LENGTHS = ['brief', 'standard', 'detailed'] as const
+export type ReplyLength = (typeof REPLY_LENGTHS)[number]
+
+export const TONE_LABELS: Record<Tone, string> = {
+  warm:         'Warm and friendly',
+  professional: 'Professional',
+  casual:       'Casual',
+  refined:      'Refined and formal',
+}
+
+export const REPLY_LENGTH_LABELS: Record<ReplyLength, string> = {
+  brief:    'Brief — one or two sentences',
+  standard: 'Standard — two or three sentences',
+  detailed: 'Detailed — up to four sentences',
+}
+
+/** Owner-controlled voice settings, stored in venues.settings.ai. */
+export interface AssistantConfig {
+  tone: Tone
+  length: ReplyLength
+  /** Free-text house rules appended to the system prompt. */
+  houseRules: string | null
+}
+
+export const DEFAULT_ASSISTANT_CONFIG: AssistantConfig = {
+  tone: 'warm',
+  length: 'standard',
+  houseRules: null,
+}
+
+export function isTone(v: string): v is Tone {
+  return (TONES as readonly string[]).includes(v)
+}
+export function isReplyLength(v: string): v is ReplyLength {
+  return (REPLY_LENGTHS as readonly string[]).includes(v)
+}
+
 // ── Venue context ─────────────────────────────────────────────────────────────
 
 /** The venue facts the assistant is allowed to state. */
@@ -104,6 +146,7 @@ export interface VenueContext {
   assistantName: string
   /** Resolved FAQ answers; missing entries are omitted rather than invented. */
   faq: Record<string, string>
+  config: AssistantConfig
 }
 
 /** Optional guest facts, used to personalise replies. */
