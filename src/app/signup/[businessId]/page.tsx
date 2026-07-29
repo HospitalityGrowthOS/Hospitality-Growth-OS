@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import QRCode from 'qrcode'
+import { normaliseEmail, suggestEmailCorrection } from '@/lib/email-suggest'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -255,6 +256,7 @@ export default function SignupPage() {
   const [errors, setErrors]   = useState<Errors>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [emailSuggestion, setEmailSuggestion] = useState<string | null>(null)
 
   const [enrolled, setEnrolled] = useState<EnrolledMember | null>(null)
 
@@ -284,6 +286,18 @@ export default function SignupPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!validate()) return
+
+    // A mistyped domain passes every format check, and the guest would never
+    // learn their card was emailed into the void. Ask once, then let them
+    // through either way.
+    if (form.email) {
+      const maybeTypo = suggestEmailCorrection(form.email)
+      if (maybeTypo && maybeTypo !== emailSuggestion) {
+        setEmailSuggestion(maybeTypo)
+        return
+      }
+    }
+
     setSubmitting(true)
     setSubmitError('')
 
@@ -294,7 +308,7 @@ export default function SignupPage() {
         body: JSON.stringify({
           name:     form.name.trim(),
           phone:    form.phone.trim(),
-          email:    form.email.trim() || null,
+          email:    normaliseEmail(form.email) || null,
           birthday: form.birthday || null,
           consent:  true,
         }),
@@ -419,10 +433,29 @@ export default function SignupPage() {
                 inputMode="email"
                 autoComplete="email"
                 value={form.email}
-                onChange={e => set('email', e.target.value)}
+                onChange={e => {
+                  set('email', e.target.value)
+                  setEmailSuggestion(null)
+                }}
                 placeholder="maria@example.com"
                 className={inputCls(errors.email)}
               />
+              {emailSuggestion && (
+                <p className="mt-1.5 text-[13px] text-ink">
+                  Did you mean{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      set('email', emailSuggestion)
+                      setEmailSuggestion(null)
+                    }}
+                    className="font-semibold text-ember underline underline-offset-2"
+                  >
+                    {emailSuggestion}
+                  </button>
+                  ? <span className="text-mid">Or tap Join again to keep yours.</span>
+                </p>
+              )}
             </Field>
 
             {/* Birthday — optional */}

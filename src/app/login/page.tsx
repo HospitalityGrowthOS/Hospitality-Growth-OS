@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { normaliseEmail, suggestEmailCorrection } from '@/lib/email-suggest'
 import Button from '@/components/ui/Button'
 import Input from '@/components/ui/Input'
 
@@ -9,26 +10,48 @@ export default function LoginPage() {
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [suggestion, setSuggestion] = useState<string | null>(null)
 
   const supabase = createClient()
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function sendLink(address: string) {
     setLoading(true)
     setError('')
+    setSuggestion(null)
 
     const { error } = await supabase.auth.signInWithOtp({
-      email,
+      email: address,
       options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard` },
     })
 
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-    } else {
-      setSent(true)
-      setLoading(false)
+    if (error) setError(error.message)
+    else setSent(true)
+    setLoading(false)
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+
+    // Trailing spaces and capitals from autofill silently break sign-in.
+    const address = normaliseEmail(email)
+    if (address !== email) setEmail(address)
+
+    // A mistyped domain is well-formed, so nothing else catches it: the link
+    // would be sent to a real address that simply isn't theirs. Ask once —
+    // never block, since an unusual domain must still get through.
+    const maybeTypo = suggestEmailCorrection(address)
+    if (maybeTypo && maybeTypo !== suggestion) {
+      setSuggestion(maybeTypo)
+      return
     }
+
+    await sendLink(address)
+  }
+
+  function acceptSuggestion() {
+    if (!suggestion) return
+    setEmail(suggestion)
+    void sendLink(suggestion)
   }
 
   return (
@@ -80,11 +103,34 @@ export default function LoginPage() {
                   label="Email address"
                   type="email"
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  onChange={e => {
+                    setEmail(e.target.value)
+                    setSuggestion(null)
+                  }}
                   placeholder="marco@ristorante-milano.de"
                   required
                   error={error || undefined}
                 />
+
+                {suggestion && (
+                  <div className="-mt-1 rounded-lg border border-[#C8A45A]/40 bg-[#C8A45A]/[0.08] px-3.5 py-2.5">
+                    <p className="text-[12px] text-ink leading-relaxed">
+                      Did you mean{' '}
+                      <button
+                        type="button"
+                        onClick={acceptSuggestion}
+                        className="font-semibold text-ember hover:underline"
+                      >
+                        {suggestion}
+                      </button>
+                      ?
+                    </p>
+                    <p className="text-[11px] text-mid mt-0.5">
+                      Press Send again to use the address you typed.
+                    </p>
+                  </div>
+                )}
+
                 <Button type="submit" loading={loading} className="w-full">
                   Send magic link
                 </Button>
