@@ -49,13 +49,17 @@ export async function POST(req: NextRequest) {
     const qrCode = generateQRCode(venue.slug || venue.id.substring(0, 4))
     const welcomePoints = (settings?.welcome_bonus_points as number) || 50
 
+    // Balances start at zero: the welcome-bonus ledger row below is what
+    // establishes them, via the after_loyalty_transaction_insert trigger.
+    // Seeding them here as well is what inflated points_earned_total to
+    // double the welcome bonus on every enrolment.
     const { data: member } = await supabase.from('loyalty_members').insert({
       venue_id: body.venue_id,
       guest_id: guest.id,
       qr_code: qrCode,
       tier: 'bronze',
-      points_balance: welcomePoints,
-      points_earned_total: welcomePoints,
+      points_balance: 0,
+      points_earned_total: 0,
       enrolled_at: new Date().toISOString(),
       birthday: body.birthday || null,
     }).select().single()
@@ -73,7 +77,8 @@ export async function POST(req: NextRequest) {
       description: 'Welcome bonus',
     }))
 
-    await mustWrite('enroll: guest tier/points', supabase.from('guests').update({ loyalty_tier: 'bronze', loyalty_points: welcomePoints }).eq('id', guest.id))
+    // Only the tier — guests.loyalty_points is set by the same trigger.
+    await mustWrite('enroll: guest tier', supabase.from('guests').update({ loyalty_tier: 'bronze' }).eq('id', guest.id))
 
     // Send WhatsApp welcome
     if (venue.whatsapp_phone_number_id && venue.whatsapp_access_token) {

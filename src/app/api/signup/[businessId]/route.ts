@@ -115,7 +115,8 @@ export async function POST(
           email:            email || null,
           whatsapp_opted_in: true,
           loyalty_tier:     'bronze',
-          loyalty_points:   WELCOME_POINTS,
+          // loyalty_points is set by the loyalty-transaction trigger below.
+          loyalty_points:   0,
           total_visits:     0,
           total_spent:      0,
         })
@@ -142,8 +143,11 @@ export async function POST(
         guest_id:           guestId,
         qr_code:            qrCode,
         tier:               'bronze',
-        points_balance:     WELCOME_POINTS,
-        points_earned_total: WELCOME_POINTS,
+        // Zero here — the welcome-bonus ledger row below establishes both,
+        // via the after_loyalty_transaction_insert trigger. Seeding them here
+        // too double-counted points_earned_total on every signup.
+        points_balance:     0,
+        points_earned_total: 0,
         enrolled_at:        new Date().toISOString(),
         birthday:           birthday || null,
       })
@@ -218,7 +222,9 @@ export async function POST(
       member: {
         id:                  member.id,
         name,
-        points:              member.points_balance,
+        // Not member.points_balance — that row was read back before the
+        // ledger insert fired the trigger that sets it, so it still reads 0.
+        points:              WELCOME_POINTS,
         tier:                member.tier,
         qr_code:             member.qr_code,
         venue_name:          venue.name,

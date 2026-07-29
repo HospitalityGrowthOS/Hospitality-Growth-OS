@@ -7,6 +7,7 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/server'
+import { mustWrite } from '@/lib/db'
 import { sendText } from '@/lib/whatsapp'
 import { calcLoyaltyTier, getTierEmoji } from '@/lib/utils'
 
@@ -55,27 +56,33 @@ export async function awardPoints(params: {
   const newTier     = calcLoyaltyTier(newBalance, thresholds)
   const tierUpgraded = newTier !== oldTier
 
-  await Promise.all([
-    supabase.from('loyalty_transactions').insert({
-      venue_id: venueId,
-      member_id: memberId,
-      type: 'earn',
-      points: pointsEarned,
-      balance_after: newBalance,
-      description: `Visit spend €${spendAmount.toFixed(2)}`,
-      reference_id: visitId || null,
-    }),
-    supabase.from('loyalty_members').update({
-      points_balance: newBalance,
-      points_earned_total: member.points_earned_total + pointsEarned,
-      tier: newTier,
-      last_activity_at: new Date().toISOString(),
-    }).eq('id', memberId),
-    supabase.from('guests').update({
-      loyalty_points: newBalance,
-      loyalty_tier: newTier,
-    }).eq('id', member.guest_id),
-  ])
+  // The `after_loyalty_transaction_insert` trigger owns points_balance,
+  // points_earned_total, points_redeemed_total, last_activity_at and
+  // guests.loyalty_points — it derives them from the ledger row on insert.
+  // The application must not write them too: doing so double-counted
+  // points_earned_total on every award, and racing the trigger inside a
+  // Promise.all made the final value depend on which write landed last.
+  //
+  // Tier is ours: the trigger does not compute it. So the ledger row goes in
+  // first (the trigger runs on it), and only then do we set tier.
+  await mustWrite('loyalty: award ledger row', supabase.from('loyalty_transactions').insert({
+    venue_id: venueId,
+    member_id: memberId,
+    type: 'earn',
+    points: pointsEarned,
+    balance_after: newBalance,
+    description: `Visit spend €${spendAmount.toFixed(2)}`,
+    reference_id: visitId || null,
+  }))
+
+  if (tierUpgraded) {
+    await Promise.all([
+      mustWrite('loyalty: member tier', supabase.from('loyalty_members')
+        .update({ tier: newTier }).eq('id', memberId)),
+      mustWrite('loyalty: guest tier', supabase.from('guests')
+        .update({ loyalty_tier: newTier }).eq('id', member.guest_id)),
+    ])
+  }
 
   // Notify the guest. Only valid inside WhatsApp's 24h service window, so a
   // failure here is expected and must not fail the points award.

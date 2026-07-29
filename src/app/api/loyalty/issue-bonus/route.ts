@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { mustWrite } from '@/lib/db'
 import { calcLoyaltyTier } from '@/lib/utils'
 
 const schema = z.object({
@@ -34,28 +35,27 @@ export async function POST(req: NextRequest) {
     const newTier    = calcLoyaltyTier(newBalance)
     const now        = new Date().toISOString()
 
-    await Promise.all([
-      admin.from('loyalty_transactions').insert({
-        venue_id:   body.venue_id,
-        member_id:  body.member_id,
-        type:       'bonus',
-        points:     body.points,
-        balance_after: newBalance,
-        description: body.reason,
-        created_by: user.id,
-      }),
-      admin.from('loyalty_members').update({
-        points_balance:     newBalance,
-        points_earned_total: member.points_earned_total + body.points,
-        tier:               newTier,
-        last_activity_at:   now,
-        updated_at:         now,
-      }).eq('id', body.member_id),
-      admin.from('guests').update({
-        loyalty_points: newBalance,
-        loyalty_tier:   newTier,
-      }).eq('id', member.guest_id),
-    ])
+    // The ledger row goes in first; its trigger sets points_balance,
+    // points_earned_total, last_activity_at and guests.loyalty_points.
+    // Only the tier is ours to write.
+    await mustWrite('issue-bonus: ledger row', admin.from('loyalty_transactions').insert({
+      venue_id:   body.venue_id,
+      member_id:  body.member_id,
+      type:       'bonus',
+      points:     body.points,
+      balance_after: newBalance,
+      description: body.reason,
+      created_by: user.id,
+    }))
+
+    if (newTier !== member.tier) {
+      await Promise.all([
+        mustWrite('issue-bonus: member tier', admin.from('loyalty_members')
+          .update({ tier: newTier, updated_at: now }).eq('id', body.member_id)),
+        mustWrite('issue-bonus: guest tier', admin.from('guests')
+          .update({ loyalty_tier: newTier }).eq('id', member.guest_id)),
+      ])
+    }
 
     return NextResponse.json({
       success:     true,

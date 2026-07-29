@@ -12,6 +12,33 @@ import { sendText } from '@/lib/whatsapp'
 import { generateWeeklyReport } from '@/lib/claude'
 import { getTierEmoji } from '@/lib/utils'
 
+/**
+ * Sends a message, treating failure as expected rather than fatal.
+ *
+ * Delivery fails routinely and for reasons outside our control: a guest
+ * changed number, blocked the business, or sits outside WhatsApp's 24-hour
+ * service window. Previously these calls were unguarded inside per-guest
+ * loops, so one undeliverable message threw and aborted the entire daily run
+ * — every venue lost its win-back sends, tier pushes, weekly reports and KPI
+ * snapshot because of a single bad phone number.
+ */
+async function trySend(
+  phoneId: string,
+  token: string,
+  phone: string,
+  message: string,
+  context: string
+): Promise<boolean> {
+  try {
+    await sendText(phoneId, token, phone, message)
+    return true
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err)
+    console.error(`[cron] send failed (${context}), continuing:`, reason)
+    return false
+  }
+}
+
 export async function GET(req: NextRequest) {
   const auth = req.headers.get('authorization')
   if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -47,18 +74,23 @@ export async function GET(req: NextRequest) {
         if (!guest?.phone) continue
         const firstName = guest.name?.split(' ')[0] || 'there'
 
-        await Promise.all([
-          sendText(phoneId, token, guest.phone,
-            `🎂 Happy Birthday, ${firstName}!\n\nAll of us at *${venue.name}* wish you a wonderful day! 🎉\n\nWe've added *${bonusPoints} bonus points* to your loyalty balance as our birthday gift to you.\n\n${getTierEmoji(m.tier)} See you soon!`
-          ),
-          supabase.from('loyalty_transactions').insert({
-            venue_id: venueId, member_id: m.id,
-            type: 'bonus', points: bonusPoints,
-            balance_after: m.points_balance + bonusPoints,
-            description: 'Birthday bonus',
-          }),
-          supabase.from('loyalty_members').update({ points_balance: m.points_balance + bonusPoints }).eq('id', m.id),
-        ])
+        // Award first, message second. Previously both shared a Promise.all,
+        // so an undeliverable message rejected the batch *after* the points
+        // had already been written — and took the whole cron down with it.
+        // The trigger on this insert maintains the balance; writing it here
+        // as well double-counted the bonus.
+        const awarded = await tryWrite('cron: birthday bonus', supabase.from('loyalty_transactions').insert({
+          venue_id: venueId, member_id: m.id,
+          type: 'bonus', points: bonusPoints,
+          balance_after: m.points_balance + bonusPoints,
+          description: 'Birthday bonus',
+        }))
+        if (!awarded) continue
+
+        await trySend(phoneId, token, guest.phone,
+          `🎂 Happy Birthday, ${firstName}!\n\nAll of us at *${venue.name}* wish you a wonderful day! 🎉\n\nWe've added *${bonusPoints} bonus points* to your loyalty balance as our birthday gift to you.\n\n${getTierEmoji(m.tier)} See you soon!`,
+          `birthday/${m.id}`
+        )
         birthdaySent++
       }
     }
@@ -81,10 +113,11 @@ export async function GET(req: NextRequest) {
         if (!guest?.phone) continue
         const firstName = guest.name?.split(' ')[0] || 'there'
 
-        await sendText(phoneId, token, guest.phone,
-          `Hi ${firstName}, we miss you! 🥺\n\nIt's been a while since we've seen you at *${venue.name}*.\n\nWe'd love to welcome you back with a *€${voucherAmount} credit* on your next visit — just show this message.\n\nValid for the next 7 days. See you soon! ❤️`
+        const sent = await trySend(phoneId, token, guest.phone,
+          `Hi ${firstName}, we miss you! 🥺\n\nIt's been a while since we've seen you at *${venue.name}*.\n\nWe'd love to welcome you back with a *€${voucherAmount} credit* on your next visit — just show this message.\n\nValid for the next 7 days. See you soon! ❤️`,
+          `winback/${m.id}`
         )
-        winbackSent++
+        if (sent) winbackSent++
       }
     }
     results[`${venueId}_winback`] = winbackSent
@@ -107,8 +140,9 @@ export async function GET(req: NextRequest) {
         const firstName = guest.name?.split(' ')[0] || 'there'
         const ptsNeeded = silverPush - m.points_balance
 
-        await sendText(phoneId, token, guest.phone,
-          `${firstName}, you're *${ptsNeeded} points* away from Silver! 🥈\n\nVisit ${venue.name} and unlock exclusive Silver perks:\n• Priority seating\n• 2× points every Tuesday\n• Monthly surprise reward\n\nYou're almost there! 🚀`
+        await trySend(phoneId, token, guest.phone,
+          `${firstName}, you're *${ptsNeeded} points* away from Silver! 🥈\n\nVisit ${venue.name} and unlock exclusive Silver perks:\n• Priority seating\n• 2× points every Tuesday\n• Monthly surprise reward\n\nYou're almost there! 🚀`,
+          `tierpush/${m.id}`
         )
       }
     }
