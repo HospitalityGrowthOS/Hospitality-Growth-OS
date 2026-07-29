@@ -41,3 +41,22 @@ export {
 // Templates and validation.
 export { TEMPLATES, getTemplate, templatesByCategory, type WorkflowTemplate } from './templates'
 export { validateWorkflow, workflowWarnings } from './validation'
+
+/**
+ * Capability Registry — types only, and deliberately so.
+ *
+ * `export type` is erased at compile time, so this adds nothing to the bundle
+ * and changes no behaviour. The registry is not implemented and has no call
+ * site; see docs/adr/0001-capability-registry.md for why implementation waits
+ * for a second Industry Module.
+ */
+export type {
+  CapabilityName,
+  CapabilityLifecycle,
+  PhaseOf,
+  CapabilityEvent,
+  CapabilityProvider,
+  CapabilityTrigger,
+  CapabilityRegistry,
+  CapabilityEventPayload,
+} from './capabilities'
