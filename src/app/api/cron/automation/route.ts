@@ -21,3 +21,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Drain failed' }, { status: 500 })
   }
 }
+
+/**
+ * pg_cron calls this via net.http_post, mirroring the review dispatcher.
+ * pg_net's http_get was observed dropping the Authorization header (401 on
+ * every call while http_post authenticated fine), so POST is the verb the
+ * database uses; GET remains for Vercel's daily cron and manual checks.
+ */
+export const POST = GET

@@ -16,15 +16,20 @@ CREATE EXTENSION IF NOT EXISTS pg_net;
 SELECT cron.unschedule('drain-automation-executions')
  WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'drain-automation-executions');
 
+-- http_post, not http_get: pg_net's http_get was observed dropping the
+-- Authorization header (every call returned 401 while the review dispatcher's
+-- http_post calls authenticated fine). This mirrors the dispatcher exactly.
 SELECT cron.schedule(
   'drain-automation-executions',
   '*/10 * * * *',
   $$
-  SELECT net.http_get(
+  SELECT net.http_post(
     url     := 'https://www.hospitalitygrowthos.com/api/cron/automation',
     headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
                  'Authorization', 'Bearer ' || current_setting('app.cron_secret', true)
-               )
+               ),
+    body    := '{}'::jsonb
   );
   $$
 );
