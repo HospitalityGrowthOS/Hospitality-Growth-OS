@@ -10,6 +10,7 @@ import { z } from 'zod'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { mustWrite } from '@/lib/db'
+import { emitEvent } from '@/lib/automation'
 import { sendLoyaltyWelcomeEmail } from '@/lib/email'
 import { sendLoyaltyWelcome as sendLoyaltyWelcomeWhatsApp } from '@/lib/whatsapp-send'
 
@@ -172,6 +173,18 @@ export async function POST(
       description:   'Welcome bonus — loyalty signup',
       reference_id: member.id,
     }))
+
+    // Two distinct facts: a person exists, and that person joined loyalty.
+    // Keeping them separate lets a future workflow react to registration from
+    // a channel that has no loyalty programme at all.
+    await emitEvent({
+      venueId, name: 'customer.registered', guestId,
+      payload: { name, phone, email: email ?? null, source: 'qr_signup' },
+    })
+    await emitEvent({
+      venueId, name: 'loyalty.member_joined', guestId,
+      payload: { member_id: member.id, tier: 'bronze', welcome_points: WELCOME_POINTS },
+    })
 
     // Fire welcome email if provided — non-blocking
     if (email) {

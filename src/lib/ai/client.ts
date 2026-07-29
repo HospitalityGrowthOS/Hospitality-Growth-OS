@@ -41,6 +41,7 @@ export type AiFeature =
   | 'summarize_conversation'
   | 'weekly_report'
   | 'business_insight'
+  | 'automation_action'
 
 export interface CallOptions {
   system: string

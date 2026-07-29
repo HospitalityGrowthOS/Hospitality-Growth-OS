@@ -47,6 +47,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     section: 'Marketing',
     items: [
       { href: '/dashboard/campaigns', label: 'Campaigns', icon: SendIcon },
+      { href: '/dashboard/automation', label: 'Automation', icon: BoltIcon },
       { href: '/dashboard/guests', label: 'Guest CRM', icon: UsersIcon },
     ],
   },
@@ -180,6 +181,9 @@ function HeartIcon({ className }: { className?: string }) {
 }
 function ChatIcon({ className }: { className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+}
+function BoltIcon({ className }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
 }
 function SendIcon({ className }: { className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></svg>

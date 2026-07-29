@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { tryWrite } from '@/lib/db'
+import { emitEvent } from '@/lib/automation'
 import { z } from 'zod'
 
 const FeedbackSchema = z.object({
@@ -113,6 +114,26 @@ export async function POST(
       .select('name, settings')
       .eq('id', existing.venue_id)
       .single()
+
+    // Every rating is an event. The engine decides what, if anything, follows.
+    const eventPayload = {
+      rating,
+      feedback: feedback ?? null,
+      request_id: params.requestId,
+      guest_name: existing.guest_name ?? null,
+    }
+    await emitEvent({
+      venueId: existing.venue_id,
+      name: 'review.received',
+      guestId: existing.guest_id ?? null,
+      payload: eventPayload,
+    })
+    await emitEvent({
+      venueId: existing.venue_id,
+      name: isPositive ? 'review.positive' : 'review.negative',
+      guestId: existing.guest_id ?? null,
+      payload: eventPayload,
+    })
 
     // Happy guest → hand them the public review link.
     if (isPositive) {

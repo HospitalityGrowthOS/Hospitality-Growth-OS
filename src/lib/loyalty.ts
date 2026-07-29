@@ -8,6 +8,10 @@
 
 import { createAdminClient } from '@/lib/supabase/server'
 import { mustWrite } from '@/lib/db'
+// Imported from the events module directly, not the package barrel: the
+// barrel pulls in the action registry, which imports this file to award
+// points. Going through it would make loyalty ⇄ automation a static cycle.
+import { emitEvent } from '@/lib/automation/events'
 import { sendText } from '@/lib/whatsapp'
 import { calcLoyaltyTier, getTierEmoji } from '@/lib/utils'
 
@@ -104,6 +108,20 @@ export async function awardPoints(params: {
     } catch (err) {
       console.error('[loyalty] points notification failed (non-fatal):', err)
     }
+  }
+
+  // Emitted after the award has landed, so any workflow reading the balance
+  // sees the new one. Points and tier are separate events because a workflow
+  // that celebrates reaching Gold should not fire on every espresso.
+  await emitEvent({
+    venueId, name: 'loyalty.points_awarded', guestId: member.guest_id,
+    payload: { member_id: memberId, points: pointsEarned, balance: newBalance, spend_amount: spendAmount },
+  })
+  if (tierUpgraded) {
+    await emitEvent({
+      venueId, name: 'loyalty.tier_changed', guestId: member.guest_id,
+      payload: { member_id: memberId, from_tier: oldTier, to_tier: newTier, balance: newBalance },
+    })
   }
 
   return {

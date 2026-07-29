@@ -246,6 +246,162 @@ export interface Database {
           }
         ]
       }
+      automation_executions: {
+        Row: {
+          id: string
+          venue_id: string
+          workflow_id: string
+          event_name: string
+          event_payload: Json
+          status: string
+          conditions_evaluated: Json
+          actions_executed: Json
+          error: string | null
+          retry_count: number
+          scheduled_for: string | null
+          started_at: string | null
+          completed_at: string | null
+          duration_ms: number | null
+          target_guest_id: string | null
+          target_channel: string | null
+          dry_run: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          venue_id: string
+          workflow_id: string
+          event_name: string
+          event_payload: Json
+          status?: string
+          conditions_evaluated: Json
+          actions_executed: Json
+          error?: string | null
+          retry_count?: number
+          scheduled_for?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+          duration_ms?: number | null
+          target_guest_id?: string | null
+          target_channel?: string | null
+          dry_run?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          venue_id?: string
+          workflow_id?: string
+          event_name?: string
+          event_payload?: Json
+          status?: string
+          conditions_evaluated?: Json
+          actions_executed?: Json
+          error?: string | null
+          retry_count?: number
+          scheduled_for?: string | null
+          started_at?: string | null
+          completed_at?: string | null
+          duration_ms?: number | null
+          target_guest_id?: string | null
+          target_channel?: string | null
+          dry_run?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_executions_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_executions_workflow_id_fkey"
+            columns: ["workflow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_workflows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_executions_target_guest_id_fkey"
+            columns: ["target_guest_id"]
+            isOneToOne: false
+            referencedRelation: "guests"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      automation_workflows: {
+        Row: {
+          id: string
+          venue_id: string
+          name: string
+          description: string | null
+          status: string
+          trigger_event: string
+          trigger_config: Json
+          conditions: Json
+          actions: Json
+          schedule: Json
+          dry_run: boolean
+          requires_approval: boolean
+          retry_policy: Json
+          template_key: string | null
+          last_executed_at: string | null
+          execution_count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          venue_id: string
+          name: string
+          description?: string | null
+          status?: string
+          trigger_event: string
+          trigger_config: Json
+          conditions: Json
+          actions: Json
+          schedule: Json
+          dry_run?: boolean
+          requires_approval?: boolean
+          retry_policy: Json
+          template_key?: string | null
+          last_executed_at?: string | null
+          execution_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          venue_id?: string
+          name?: string
+          description?: string | null
+          status?: string
+          trigger_event?: string
+          trigger_config?: Json
+          conditions?: Json
+          actions?: Json
+          schedule?: Json
+          dry_run?: boolean
+          requires_approval?: boolean
+          retry_policy?: Json
+          template_key?: string | null
+          last_executed_at?: string | null
+          execution_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_workflows_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       campaign_sends: {
         Row: {
           id: string

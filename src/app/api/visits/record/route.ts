@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { getCurrentVenue } from '@/lib/venue'
 import { awardPoints } from '@/lib/loyalty'
 import { mustWrite, tryWrite } from '@/lib/db'
+import { emitEvent } from '@/lib/automation'
 
 const schema = z.object({
   // Accepted for backwards compatibility but never trusted — the venue always
@@ -93,6 +94,22 @@ export async function POST(req: NextRequest) {
 
     // Track event
     await tryWrite('visits: analytics event', supabase.from('analytics_events').insert({ venue_id: venueId, event_type: 'visit_recorded', properties: { visit_id: visit.id, spend: body.spend_amount } }))
+
+    // Hand the event to the Automation Engine. It decides whether anything
+    // should happen; this route neither knows nor cares which workflows exist.
+    // emitEvent never throws — a misbehaving workflow cannot fail a visit.
+    await emitEvent({
+      venueId,
+      name: 'visit.recorded',
+      guestId: guest.id,
+      payload: {
+        visit_id: visit.id,
+        spend_amount: body.spend_amount,
+        party_size: body.party_size,
+        table_number: body.table_number ?? null,
+        source: body.source,
+      },
+    })
 
     return NextResponse.json({ success: true, visit_id: visit.id, guest_id: guest.id })
   } catch (err) {
