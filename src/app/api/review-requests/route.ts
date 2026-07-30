@@ -1,65 +1,69 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { getCurrentVenue } from '@/lib/venue'
+import { tryWrite } from '@/lib/db'
 import { z } from 'zod'
 import { sendReviewRequest } from '@/lib/whatsapp-send'
 
+/**
+ * Manual review request management.
+ *
+ * Originally built to be called by n8n, and therefore unauthenticated with
+ * `venue_id` taken from the request. That was a hole in two directions:
+ * venue ids are public — they appear in QR signup URLs — so anyone could send
+ * WhatsApp messages using a venue's own credentials, risking that venue's
+ * number being banned; and the GET returned every review request for any
+ * venue, guest names and phone numbers included.
+ *
+ * The platform owns its workflow engine now and nothing calls these endpoints
+ * internally. Both handlers require an owner session and derive the venue from
+ * it; a `venue_id` in the request is ignored.
+ */
+
 const CreateRequestSchema = z.object({
-  venue_id: z.string().uuid(),
+  // Accepted for backwards compatibility, never trusted.
+  venue_id: z.string().uuid().optional(),
   guest_id: z.string().uuid().optional(),
   guest_name: z.string().min(1).optional(),
   guest_phone: z.string().min(1).optional(),
 })
 
-// POST /api/review-requests
-// Creates a review request. Called by n8n or dashboard.
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const parsed = CreateRequestSchema.safeParse(body)
+    const venue = await getCurrentVenue()
+    if (!venue) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+    const parsed = CreateRequestSchema.safeParse(await request.json())
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Invalid input', details: parsed.error.flatten() },
         { status: 400 }
       )
     }
-
-    const { venue_id, guest_id, guest_name, guest_phone } = parsed.data
+    const { guest_id, guest_name, guest_phone } = parsed.data
 
     const admin = await createAdminClient()
 
-    // Verify venue exists
-    const { data: venue } = await admin
-      .from('venues')
-      .select('id, name')
-      .eq('id', venue_id)
-      .single()
-
-    if (!venue) {
-      return NextResponse.json({ error: 'Venue not found' }, { status: 404 })
-    }
-
-    // If guest_id provided, pull guest info
     let resolvedName = guest_name
     let resolvedPhone = guest_phone
 
-    if (guest_id && (!resolvedName || !resolvedPhone)) {
+    if (guest_id) {
       const { data: guest } = await admin
         .from('guests')
         .select('name, phone')
         .eq('id', guest_id)
-        .single()
+        .eq('venue_id', venue.id)   // never resolve a guest across venues
+        .maybeSingle()
 
-      if (guest) {
-        resolvedName = resolvedName || guest.name || undefined
-        resolvedPhone = resolvedPhone || guest.phone || undefined
-      }
+      if (!guest) return NextResponse.json({ error: 'Guest not found' }, { status: 404 })
+      resolvedName = resolvedName || guest.name || undefined
+      resolvedPhone = resolvedPhone || guest.phone || undefined
     }
 
     const { data: reviewRequest, error } = await admin
       .from('review_requests')
       .insert({
-        venue_id,
+        venue_id: venue.id,
         guest_id: guest_id || null,
         guest_name: resolvedName || null,
         guest_phone: resolvedPhone || null,
@@ -68,32 +72,28 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (error) {
-      console.error('[review-requests] insert error:', error)
-      return NextResponse.json({ error: error.message, code: error.code, details: error.details }, { status: 500 })
+    if (error || !reviewRequest) {
+      console.error('[review-requests] insert error:', error?.message)
+      return NextResponse.json({ error: 'Could not create request' }, { status: 500 })
     }
 
-    // Manual send goes out immediately — fire-and-forget, then record the outcome.
-    // scheduled_for stays NULL so the 45-minute dispatcher never picks this up too.
+    // Manual send goes out immediately. scheduled_for stays NULL so the
+    // 45-minute dispatcher never picks this up a second time.
     if (resolvedPhone) {
-      sendReviewRequest({
+      const result = await sendReviewRequest({
         phone:     resolvedPhone,
         guestName: resolvedName || 'Guest',
         venueName: venue.name,
         requestId: reviewRequest.id,
-        venueId:   venue_id,
+        venueId:   venue.id,
         guestId:   guest_id,
       })
-        .then(result => admin
-          .from('review_requests')
-          .update(
-            result.ok
-              ? { status: 'sent', sent_at: new Date().toISOString() }
-              : { status: 'failed' }
-          )
-          .eq('id', reviewRequest.id)
-        )
-        .catch(err => console.error('[review-requests] WhatsApp error:', err))
+      await tryWrite('review-requests: record send outcome', admin
+        .from('review_requests')
+        .update(result.ok
+          ? { status: 'sent', sent_at: new Date().toISOString() }
+          : { status: 'failed' })
+        .eq('id', reviewRequest.id))
     }
 
     return NextResponse.json({
@@ -108,31 +108,26 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET /api/review-requests?venue_id=xxx
-// Returns all requests for a venue (used by dashboard)
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url)
-    const venue_id = searchParams.get('venue_id')
-
-    if (!venue_id) {
-      return NextResponse.json({ error: 'venue_id required' }, { status: 400 })
-    }
+    const venue = await getCurrentVenue()
+    if (!venue) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const admin = await createAdminClient()
     const { data, error } = await admin
       .from('review_requests')
       .select('*')
-      .eq('venue_id', venue_id)
+      .eq('venue_id', venue.id)   // scoped to the caller's own venue
       .order('created_at', { ascending: false })
       .limit(100)
 
     if (error) {
+      console.error('[review-requests] GET failed:', error.message)
       return NextResponse.json({ error: 'Failed to fetch' }, { status: 500 })
     }
-
     return NextResponse.json({ requests: data })
   } catch (e) {
+    console.error('[review-requests] GET error:', e)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
