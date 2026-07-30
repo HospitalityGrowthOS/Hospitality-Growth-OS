@@ -7,6 +7,7 @@ import Button from '@/components/ui/Button'
 import Badge from '@/components/ui/Badge'
 import Link from 'next/link'
 import type { Guest } from '@/types/database'
+import { formatMoneyShort } from '@/lib/money'
 
 const tierVariant: Record<string, 'gold' | 'silver' | 'bronze' | 'default'> = {
   gold: 'gold', silver: 'silver', bronze: 'bronze', none: 'default',
@@ -73,7 +74,7 @@ export default async function GuestsPage() {
           {[
             { label: 'Total Guests',      value: String(totalGuests ?? 0),             sub: 'In CRM database',        color: 'border-t-ember' },
             { label: 'Active (30d)',       value: String(activeGuests ?? 0),            sub: `${totalGuests ? Math.round(((activeGuests ?? 0) / totalGuests) * 100) : 0}% of database`, color: 'border-t-teal' },
-            { label: 'Avg Lifetime Value', value: `€${avgLifetimeValue.toLocaleString()}`, sub: 'Per returning guest',  color: 'border-t-gold' },
+            { label: 'Avg Lifetime Value', value: formatMoneyShort(avgLifetimeValue, venue.settings), sub: 'Per returning guest',  color: 'border-t-gold' },
             { label: 'At Risk (60d+)',    value: String(atRiskGuests ?? 0),            sub: 'Win-back recommended',   color: 'border-t-[#C0392B]' },
           ].map(({ label, value, sub, color }) => (
             <div key={label} className={`bg-white border border-[#E8E0D4] border-t-2 ${color} rounded-xl p-5`}>
@@ -126,7 +127,7 @@ export default async function GuestsPage() {
                   {g.last_visit_at ? new Date(g.last_visit_at).toLocaleDateString() : 'Never'}
                 </div>
 
-                <div className="font-data text-[13px] font-semibold text-ink">€{(g.total_spent || 0).toFixed(0)}</div>
+                <div className="font-data text-[13px] font-semibold text-ink">{formatMoneyShort(g.total_spent || 0, venue.settings)}</div>
 
                 <Link href={`/dashboard/guests/${g.id}`}>
                   <Button size="sm" variant="ghost" className="text-[11px] px-2">View</Button>

@@ -11,6 +11,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { mustWrite } from '@/lib/db'
 import { emitEvent } from '@/lib/automation'
+import { currencySymbol } from '@/lib/money'
 import { sendLoyaltyWelcomeEmail } from '@/lib/email'
 import { sendLoyaltyWelcome as sendLoyaltyWelcomeWhatsApp } from '@/lib/whatsapp-send'
 
@@ -196,6 +197,7 @@ export async function POST(
         tier:      'bronze',
         qrCode,
         memberId:  member.id,
+        currencySym: currencySymbol(venue.settings),
       }).catch(err => console.error('[signup] Email error:', err))
     }
 

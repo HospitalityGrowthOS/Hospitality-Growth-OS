@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { tryWrite } from '@/lib/db'
+import { formatMoneyShort } from '@/lib/money'
 import { sendText } from '@/lib/whatsapp'
 import { generateWeeklyReport } from '@/lib/claude'
 import { getTierEmoji } from '@/lib/utils'
@@ -108,13 +109,14 @@ export async function GET(req: NextRequest) {
     let winbackSent = 0
     if (inactiveMembers?.length && phoneId && token) {
       const voucherAmount = (settings.winback_voucher as number) || 5
+      const money = (n: number) => formatMoneyShort(n, settings)
       for (const m of inactiveMembers) {
         const guest = m.guests as { name?: string; phone?: string }
         if (!guest?.phone) continue
         const firstName = guest.name?.split(' ')[0] || 'there'
 
         const sent = await trySend(phoneId, token, guest.phone,
-          `Hi ${firstName}, we miss you! 🥺\n\nIt's been a while since we've seen you at *${venue.name}*.\n\nWe'd love to welcome you back with a *€${voucherAmount} credit* on your next visit — just show this message.\n\nValid for the next 7 days. See you soon! ❤️`,
+          `Hi ${firstName}, we miss you! 🥺\n\nIt's been a while since we've seen you at *${venue.name}*.\n\nWe'd love to welcome you back with a *${money(voucherAmount)} credit* on your next visit — just show this message.\n\nValid for the next 7 days. See you soon! ❤️`,
           `winback/${m.id}`
         )
         if (sent) winbackSent++

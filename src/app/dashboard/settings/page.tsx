@@ -5,6 +5,7 @@ import { getCurrentVenue } from '@/lib/venue'
 import Topbar from '@/components/layout/Topbar'
 import { Card, CardBody } from '@/components/ui/Card'
 import SettingsForm, { type VenueSettingsValues } from './SettingsForm'
+import { currencySymbol } from '@/lib/money'
 
 export default async function SettingsPage() {
   const venue = await getCurrentVenue()
@@ -50,7 +51,7 @@ export default async function SettingsPage() {
           </Card>
         )}
 
-        <SettingsForm initial={initial} />
+        <SettingsForm initial={initial} currencySym={currencySymbol(venue.settings)} />
 
         <Card className="max-w-2xl">
           <CardBody className="flex items-center justify-between py-4">

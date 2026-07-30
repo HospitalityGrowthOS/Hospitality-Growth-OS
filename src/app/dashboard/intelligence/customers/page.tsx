@@ -7,6 +7,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/Card'
 import KpiCard from '@/components/ui/KpiCard'
 import Badge from '@/components/ui/Badge'
 import { Empty, Insights, Metric } from '../components'
+import { formatMoneyShort } from '@/lib/money'
 
 const TIER_VARIANT: Record<string, 'gold' | 'silver' | 'bronze' | 'default'> = {
   gold: 'gold', silver: 'silver', bronze: 'bronze', none: 'default',
@@ -174,7 +175,7 @@ export default async function CustomerIntelligencePage() {
                     </td>
                     <td className="px-5 py-3 text-right font-data text-mid">{g.visits}</td>
                     <td className="px-5 py-3 text-right font-data font-semibold text-ink">
-                      €{g.totalSpent.toFixed(0)}
+                      {formatMoneyShort(g.totalSpent, venue.settings)}
                     </td>
                   </tr>
                 ))}

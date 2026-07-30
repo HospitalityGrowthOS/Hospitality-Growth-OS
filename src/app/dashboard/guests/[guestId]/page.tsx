@@ -8,6 +8,7 @@ import Topbar from '@/components/layout/Topbar'
 import { Card, CardHeader, CardBody } from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import KpiCard from '@/components/ui/KpiCard'
+import { formatMoneyShort } from '@/lib/money'
 
 const tierVariant: Record<string, 'gold' | 'silver' | 'bronze' | 'default'> = {
   gold: 'gold', silver: 'silver', bronze: 'bronze', none: 'default',
@@ -120,7 +121,7 @@ export default async function GuestProfilePage({ params }: { params: { guestId: 
         {/* Numbers */}
         <div className="grid grid-cols-4 gap-4">
           <KpiCard label="Total visits" value={guest.total_visits ?? 0} />
-          <KpiCard label="Lifetime spend" value={`€${(guest.total_spent ?? 0).toFixed(0)}`} accent="teal" />
+          <KpiCard label="Lifetime spend" value={formatMoneyShort(guest.total_spent ?? 0, venue.settings)} accent="teal" />
           <KpiCard label="Loyalty points" value={member?.points_balance ?? guest.loyalty_points ?? 0} accent="gold" />
           <KpiCard label="Avg rating given" value={avgRating === '—' ? '—' : `${avgRating} ★`} accent="ember" />
         </div>
@@ -147,7 +148,7 @@ export default async function GuestProfilePage({ params }: { params: { guestId: 
                       </p>
                     </div>
                     <span className="font-data text-[13px] font-semibold text-ink">
-                      €{(v.spend_amount ?? 0).toFixed(0)}
+                      {formatMoneyShort(v.spend_amount ?? 0, venue.settings)}
                     </span>
                   </div>
                 ))

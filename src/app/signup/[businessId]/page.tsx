@@ -3,10 +3,11 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import QRCode from 'qrcode'
 import { normaliseEmail, suggestEmailCorrection } from '@/lib/email-suggest'
+import { currencySymbol } from '@/lib/money'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type VenueInfo = { id: string; name: string; type: string; city: string | null }
+type VenueInfo = { id: string; name: string; type: string; city: string | null; settings?: unknown }
 
 type EnrolledMember = {
   id: string
@@ -75,9 +76,12 @@ const inputCls = (err?: string) =>
 function LoyaltyCard({
   member,
   venueName,
+  currencySym,
 }: {
   member: EnrolledMember
   venueName: string
+  /** Resolved from the venue's settings by the parent, which holds them. */
+  currencySym: string
 }) {
   const [qrDataUrl, setQrDataUrl] = useState('')
 
@@ -199,7 +203,7 @@ function LoyaltyCard({
                 {member.points_to_next_tier} pts to {tierLabel[member.next_tier]}
               </span>
             </div>
-            <p className="text-[11px] text-[#6B5F56]">Earn 10 points per €1 spent on your next visit</p>
+            <p className="text-[11px] text-[#6B5F56]">Earn 10 points per {currencySym}1 spent on your next visit</p>
           </div>
         )}
 
@@ -221,7 +225,7 @@ function LoyaltyCard({
           </div>
           <div className="flex flex-col gap-2.5">
             {[
-              { icon: '🍽️', label: 'Visit & dine',    pts: '10 pts per €1' },
+              { icon: '🍽️', label: 'Visit & dine',    pts: `10 pts per ${currencySym}1` },
               { icon: '⭐', label: 'Leave a review',  pts: '+50 pts' },
               { icon: '🎂', label: 'Birthday reward', pts: '+200 pts / year' },
               { icon: '👥', label: 'Refer a friend',  pts: '+100 pts' },
@@ -332,7 +336,7 @@ export default function SignupPage() {
 
   // ── Enrolled: show loyalty card ────────────────────────────────────────────
   if (enrolled) {
-    return <LoyaltyCard member={enrolled} venueName={venue?.name ?? enrolled.venue_name} />
+    return <LoyaltyCard member={enrolled} venueName={venue?.name ?? enrolled.venue_name} currencySym={currencySymbol(venue?.settings)} />
   }
 
   // ── Loading ────────────────────────────────────────────────────────────────
@@ -382,7 +386,7 @@ export default function SignupPage() {
         <div className="grid grid-cols-3 gap-2 mb-6">
           {[
             { icon: '🎁', label: '50 welcome pts' },
-            { icon: '⭐', label: '10 pts per €1' },
+            { icon: '⭐', label: `10 pts per ${currencySymbol(venue?.settings)}1` },
             { icon: '🥇', label: 'Gold rewards' },
           ].map(({ icon, label }) => (
             <div key={label} className="bg-white border border-[#E8E0D4] rounded-xl p-3 text-center">

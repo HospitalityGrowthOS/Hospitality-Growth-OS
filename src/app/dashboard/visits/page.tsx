@@ -8,6 +8,7 @@ import { Card, CardHeader, CardBody } from '@/components/ui/Card'
 import Badge from '@/components/ui/Badge'
 import KpiCard from '@/components/ui/KpiCard'
 import RecordVisitForm from './RecordVisitForm'
+import { currencySymbol, formatMoneyShort } from '@/lib/money'
 
 function fmtWhen(iso: string) {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
@@ -76,11 +77,11 @@ export default async function VisitsPage() {
       <div className="flex-1 overflow-y-auto p-6 space-y-5">
         <div className="grid grid-cols-3 gap-4">
           <KpiCard label="Visits today" value={todayCount ?? 0} />
-          <KpiCard label="Revenue today" value={`€${revenue24.toFixed(0)}`} accent="teal" />
+          <KpiCard label="Revenue today" value={formatMoneyShort(revenue24, venue.settings)} accent="teal" />
           <KpiCard label="Review requests queued" value={queuedCount ?? 0} accent="gold" />
         </div>
 
-        <RecordVisitForm delayMinutes={delayMinutes} />
+        <RecordVisitForm delayMinutes={delayMinutes} currencySym={currencySymbol(venue.settings)} />
 
         <Card>
           <CardHeader>
@@ -125,7 +126,7 @@ export default async function VisitsPage() {
                         <td className="px-5 py-3 text-mid">{v.party_size ?? 1}</td>
                         <td className="px-5 py-3 text-mid">{v.table_number || '—'}</td>
                         <td className="px-5 py-3 text-right font-data font-semibold text-ink">
-                          €{(v.spend_amount ?? 0).toFixed(0)}
+                          {formatMoneyShort(v.spend_amount ?? 0, venue.settings)}
                         </td>
                         <td className="px-5 py-3 text-mid">{fmtWhen(v.visited_at)}</td>
                       </tr>

@@ -8,6 +8,7 @@
 
 import { createAdminClient } from '@/lib/supabase/server'
 import { mustWrite } from '@/lib/db'
+import { formatMoney } from '@/lib/money'
 // Imported from the events module directly, not the package barrel: the
 // barrel pulls in the action registry, which imports this file to award
 // points. Going through it would make loyalty ⇄ automation a static cycle.
@@ -75,7 +76,7 @@ export async function awardPoints(params: {
     type: 'earn',
     points: pointsEarned,
     balance_after: newBalance,
-    description: `Visit spend €${spendAmount.toFixed(2)}`,
+    description: `Visit spend ${formatMoney(spendAmount, venue.settings)}`,
     reference_id: visitId || null,
   }))
 

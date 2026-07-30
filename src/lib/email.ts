@@ -16,13 +16,15 @@ interface LoyaltyWelcomeEmailProps {
   tier: string
   qrCode: string
   memberId: string
+  /** Venue's currency symbol. Defaults to euro so existing callers keep working. */
+  currencySym?: string
 }
 
 const TIER_EMOJI: Record<string, string> = { bronze: '🥉', silver: '🥈', gold: '🥇' }
 const TIER_LABEL: Record<string, string> = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' }
 
 export async function sendLoyaltyWelcomeEmail(props: LoyaltyWelcomeEmailProps) {
-  const { to, name, venueName, points, tier, qrCode, memberId } = props
+  const { to, name, venueName, points, tier, qrCode, memberId, currencySym = '€' } = props
   const firstName = name.split(' ')[0]
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'
   const cardUrl = `${appUrl}/loyalty/${memberId}`
@@ -34,6 +36,7 @@ export async function sendLoyaltyWelcomeEmail(props: LoyaltyWelcomeEmailProps) {
 
   const html = buildEmailHtml({
     firstName, name, venueName, points, tier, qrCode, cardUrl, qrImageUrl, pointsToSilver,
+    currencySym,
   })
 
   const from = process.env.EMAIL_FROM || 'onboarding@resend.dev'
@@ -81,6 +84,7 @@ function buildEmailHtml(p: {
   cardUrl: string
   qrImageUrl: string
   pointsToSilver: number
+  currencySym: string
 }) {
   const emoji = TIER_EMOJI[p.tier] ?? '🥉'
   const tierLabel = TIER_LABEL[p.tier] ?? 'Bronze'
@@ -167,7 +171,7 @@ function buildEmailHtml(p: {
       <table width="100%" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:12px;border:1px solid #E8E0D4;">
         <tr><td style="padding:16px 20px;">
           <p style="margin:0 0 4px;font-size:13px;font-weight:600;color:#1A1510;">🥈 ${p.pointsToSilver} more points to Silver</p>
-          <p style="margin:0;font-size:11px;color:#6B5F56;">Visit &amp; spend to earn 10 pts per €1</p>
+          <p style="margin:0;font-size:11px;color:#6B5F56;">Visit &amp; spend to earn 10 pts per ${p.currencySym}1</p>
         </td></tr>
       </table>
     </td></tr>` : `
@@ -191,7 +195,7 @@ function buildEmailHtml(p: {
           <p style="margin:0 0 12px;font-size:12px;font-weight:600;color:#1A1510;">How to earn more points</p>
         </td></tr>
         ${[
-          ['🍽️', 'Visit &amp; dine', '10 pts per €1'],
+          ['🍽️', 'Visit &amp; dine', `10 pts per ${p.currencySym}1`],
           ['⭐', 'Leave a review', '+50 pts bonus'],
           ['🎂', 'Birthday reward', '+200 pts / year'],
           ['👥', 'Refer a friend', '+100 pts / referral'],

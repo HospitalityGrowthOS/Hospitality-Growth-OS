@@ -7,6 +7,7 @@
 import { createClient } from '@supabase/supabase-js'
 import QRCode from 'qrcode'
 import { notFound } from 'next/navigation'
+import { currencySymbol } from '@/lib/money'
 
 function getAdminClient() {
   return createClient(
@@ -64,7 +65,7 @@ export default async function LoyaltyCardPage({
   // Fetch venue separately
   const { data: venue } = await supabase
     .from('venues')
-    .select('name, city')
+    .select('name, city, settings')
     .eq('id', member.venue_id)
     .single()
 
@@ -207,7 +208,7 @@ export default async function LoyaltyCardPage({
           </div>
           <div className="flex flex-col gap-2.5">
             {[
-              { icon: '🍽️', label: 'Visit & dine',    pts: '10 pts per €1' },
+              { icon: '🍽️', label: 'Visit & dine',    pts: `10 pts per ${currencySymbol(venue?.settings)}1` },
               { icon: '🎁', label: 'Welcome bonus',   pts: '50 pts' },
               { icon: '⭐', label: 'Leave a review',  pts: '+50 pts' },
               { icon: '🎂', label: 'Birthday reward', pts: '+200 pts / year' },

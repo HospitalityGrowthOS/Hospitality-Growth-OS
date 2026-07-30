@@ -8,7 +8,7 @@ import Input from '@/components/ui/Input'
 
 type State = 'idle' | 'saving' | 'saved' | 'error'
 
-export default function RecordVisitForm({ delayMinutes }: { delayMinutes: number }) {
+export default function RecordVisitForm({ delayMinutes, currencySym }: { delayMinutes: number; currencySym: string }) {
   const router = useRouter()
   const [phone, setPhone]   = useState('')
   const [spend, setSpend]   = useState('')
@@ -69,7 +69,7 @@ export default function RecordVisitForm({ delayMinutes }: { delayMinutes: number
           </Field>
           <Field label="Amount spent">
             <div className="flex items-center gap-2">
-              <span className="text-[13px] text-mid">€</span>
+              <span className="text-[13px] text-mid">{currencySym}</span>
               <Input
                 type="number" min={0} step="0.01"
                 value={spend}

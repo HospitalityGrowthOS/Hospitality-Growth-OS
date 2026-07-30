@@ -18,7 +18,7 @@ export interface VenueSettingsValues {
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
-export default function SettingsForm({ initial }: { initial: VenueSettingsValues }) {
+export default function SettingsForm({ initial, currencySym = '€' }: { initial: VenueSettingsValues; currencySym?: string }) {
   const router = useRouter()
   const [values, setValues] = useState(initial)
   const [state, setState] = useState<SaveState>('idle')
@@ -116,7 +116,7 @@ export default function SettingsForm({ initial }: { initial: VenueSettingsValues
           <h2 className="font-display text-[15px] font-semibold text-ink">Loyalty &amp; assistant</h2>
         </CardHeader>
         <CardBody className="space-y-4">
-          <Field label="Points per €1 spent">
+          <Field label={`Points per ${currencySym}1 spent`}>
             <Input
               type="number"
               min={0}

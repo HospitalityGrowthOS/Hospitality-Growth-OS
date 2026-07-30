@@ -7,6 +7,7 @@ import Badge from '@/components/ui/Badge'
 import Link from 'next/link'
 import IssuePointsModal from './IssuePointsModal'
 import type { LoyaltyMember } from '@/types/database'
+import { currencySymbol } from '@/lib/money'
 
 type MemberWithGuest = LoyaltyMember & {
   guests: { name: string | null; phone: string | null; total_visits: number; total_spent: number } | null
@@ -120,7 +121,7 @@ export default async function LoyaltyPage() {
             { label: 'Total Members',   value: String(totalCount ?? 0),   sub: 'All tiers',          color: 'border-t-ember' },
             { label: 'Gold Members',    value: String(goldCount ?? 0),    sub: `${totalCount ? Math.round(((goldCount ?? 0) / totalCount) * 100) : 0}% of total`, color: 'border-t-gold' },
             { label: 'Avg Points Held', value: avgPoints.toLocaleString(), sub: 'Per active member',  color: 'border-t-teal' },
-            { label: 'Points per €',    value: `${pointsPerEuro}pt`,      sub: 'Earn rate',           color: 'border-t-[#2A9D5C]' },
+            { label: `Points per ${currencySymbol(venue.settings)}`,    value: `${pointsPerEuro}pt`,      sub: 'Earn rate',           color: 'border-t-[#2A9D5C]' },
           ].map(({ label, value, sub, color }) => (
             <div key={label} className={`bg-white border border-[#E8E0D4] border-t-2 ${color} rounded-xl p-5`}>
               <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-mid mb-2">{label}</div>
