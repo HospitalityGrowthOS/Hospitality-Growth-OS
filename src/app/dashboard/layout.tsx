@@ -1,12 +1,12 @@
 import Sidebar from '@/components/layout/Sidebar'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { getCurrentVenue } from '@/lib/venue'
+import { getCurrentVenue, listOwnedVenues } from '@/lib/venue'
 import Link from 'next/link'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const venue = await getCurrentVenue()
+  const [venue, ownedVenues] = await Promise.all([getCurrentVenue(), listOwnedVenues()])
 
   const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Owner'
   const userInitials = userName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
@@ -54,6 +54,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         venueName={venueName}
         venueInitials={venueInitials}
         planName={planName}
+        currentVenueId={venue?.id ?? null}
+        venues={ownedVenues.map(v => ({ id: v.id, name: v.name }))}
         reviewsBadge={reviewsBadge}
         aiBadge={aiBadge}
       />

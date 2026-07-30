@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -13,6 +14,10 @@ interface SidebarProps {
   planName?: string | null
   reviewsBadge?: number
   aiBadge?: number
+  /** The venue currently being viewed. */
+  currentVenueId?: string | null
+  /** Every venue this owner has. The switcher only appears when there are two or more. */
+  venues?: { id: string; name: string }[]
 }
 
 type BadgeKey = 'reviews' | 'ai'
@@ -60,10 +65,34 @@ const NAV: { section: string; items: NavItem[] }[] = [
   },
 ]
 
-export default function Sidebar({ userName, userInitials, userEmail, venueName, venueInitials, planName, reviewsBadge = 0, aiBadge = 0 }: SidebarProps) {
+export default function Sidebar({ userName, userInitials, userEmail, venueName, venueInitials, planName, reviewsBadge = 0, aiBadge = 0, currentVenueId = null, venues = [] }: SidebarProps) {
   const badgeCounts: Record<BadgeKey, number> = { reviews: reviewsBadge, ai: aiBadge }
   const pathname = usePathname()
   const router = useRouter()
+  const [switcherOpen, setSwitcherOpen] = useState(false)
+  const [switching, setSwitching] = useState<string | null>(null)
+
+  const canSwitch = venues.length > 1
+
+  async function switchVenue(venueId: string) {
+    if (venueId === currentVenueId) { setSwitcherOpen(false); return }
+    setSwitching(venueId)
+    try {
+      const res = await fetch('/api/venues/select', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ venue_id: venueId }),
+      })
+      if (res.ok) {
+        setSwitcherOpen(false)
+        // Refresh rather than navigate: every server component re-resolves the
+        // venue from the new cookie, so the whole dashboard follows.
+        router.refresh()
+      }
+    } finally {
+      setSwitching(null)
+    }
+  }
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -93,14 +122,48 @@ export default function Sidebar({ userName, userInitials, userEmail, venueName, 
         </div>
       </div>
 
-      {/* Venue switcher */}
-      <div className="mx-3 my-3 bg-white/[0.04] border border-white/[0.08] rounded-lg p-2.5 flex items-center gap-2.5 cursor-pointer hover:bg-white/[0.07] transition-colors">
-        <div className="w-8 h-8 rounded-md bg-gradient-to-br from-ember to-[#c44d1a] flex items-center justify-center text-white text-xs font-bold font-display flex-shrink-0">{venueInitials}</div>
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold text-paper truncate">{venueName}</div>
-          <div className="text-[10px] text-gold uppercase tracking-[0.1em]">{planName ? `${planName.charAt(0).toUpperCase() + planName.slice(1)} Plan` : 'Free Trial'}</div>
+      {/* Venue switcher — a real control when there is more than one venue,
+          and a plain label when there is not. */}
+      <div className="mx-3 my-3 relative">
+        <div
+          onClick={() => canSwitch && setSwitcherOpen(o => !o)}
+          className={cn(
+            'bg-white/[0.04] border border-white/[0.08] rounded-lg p-2.5 flex items-center gap-2.5 transition-colors',
+            canSwitch ? 'cursor-pointer hover:bg-white/[0.07]' : 'cursor-default'
+          )}
+        >
+          <div className="w-8 h-8 rounded-md bg-gradient-to-br from-ember to-[#c44d1a] flex items-center justify-center text-white text-xs font-bold font-display flex-shrink-0">{venueInitials}</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-semibold text-paper truncate">{venueName}</div>
+            <div className="text-[10px] text-gold uppercase tracking-[0.1em]">{planName ? `${planName.charAt(0).toUpperCase() + planName.slice(1)} Plan` : 'Free Trial'}</div>
+          </div>
+          {canSwitch && (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              className={cn('text-mid flex-shrink-0 transition-transform', switcherOpen && 'rotate-180')}>
+              <polyline points="6,9 12,15 18,9"/>
+            </svg>
+          )}
         </div>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-mid flex-shrink-0"><polyline points="6,9 12,15 18,9"/></svg>
+
+        {canSwitch && switcherOpen && (
+          <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-ink border border-white/[0.12] rounded-lg shadow-xl overflow-hidden">
+            {venues.map(v => (
+              <button
+                key={v.id}
+                onClick={() => switchVenue(v.id)}
+                disabled={switching !== null}
+                className={cn(
+                  'w-full text-left px-3 py-2.5 text-xs transition-colors flex items-center gap-2 disabled:opacity-50',
+                  v.id === currentVenueId ? 'bg-ember/15 text-paper' : 'text-paper/70 hover:bg-white/[0.06] hover:text-paper'
+                )}
+              >
+                <span className="flex-1 truncate">{v.name}</span>
+                {switching === v.id && <span className="text-[10px] text-mid">switching…</span>}
+                {v.id === currentVenueId && switching === null && <span className="text-ember">✓</span>}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Nav */}
