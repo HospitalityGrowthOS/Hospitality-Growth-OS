@@ -62,7 +62,7 @@ async function deliver(params: {
     return { ok: true, stub: true }
   }
 
-  const from = process.env.EMAIL_FROM || 'onboarding@resend.dev'
+  const from = fromAddress()
 
   try {
     const res = await fetch('https://api.resend.com/emails', {
@@ -83,6 +83,36 @@ async function deliver(params: {
     console.error('[email] Send failed:', err)
     return { ok: false, error: String(err) }
   }
+}
+
+/**
+ * The configured sender, normalised.
+ *
+ * EMAIL_FROM is typed into a web form, and web forms are how invisible
+ * whitespace gets in. A value of "Name <noreply@ example.com >" is rejected by
+ * Resend with a 422 that never reaches the product — the send fails, the
+ * request stays queued, and from the database it is indistinguishable from a
+ * request nobody has processed yet. That cost most of an afternoon.
+ *
+ * Spaces inside the angle brackets are stripped; spaces in the display name
+ * are kept, because "Hospitality Growth OS" is meant to have them.
+ */
+function fromAddress(): string {
+  const raw = (process.env.EMAIL_FROM || 'onboarding@resend.dev').trim()
+
+  // Split on the brackets first and clean the halves separately. An earlier
+  // version required the address to be whitespace-free to match at all, so the
+  // corrupted input this exists for fell through to the strip-everything path
+  // and came out as "HospitalityGrowthOS<...>" — name mangled, still wrong.
+  const named = raw.match(/^([^<]*)<([^>]*)>\s*$/)
+  if (named) {
+    const name = named[1].trim().replace(/^["']|["']$/g, '')
+    const addr = named[2].replace(/\s+/g, '')
+    return name ? `${name} <${addr}>` : addr
+  }
+
+  // Bare address form: no display name, so no legitimate spaces at all.
+  return raw.replace(/\s+/g, '')
 }
 
 /**
