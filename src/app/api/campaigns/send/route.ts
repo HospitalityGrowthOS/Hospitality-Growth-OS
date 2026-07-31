@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
         })
 
         try {
-          await sendText(venue.whatsapp_phone_number_id as string, venue.whatsapp_access_token as string, guest.phone, message)
+          await sendText(venue.whatsapp_phone_number_id as string, venue.whatsapp_access_token as string, guest.phone, message, campaign.venue_id)
           await tryWrite('campaigns: record send', supabase.from('campaign_sends').insert({
             campaign_id, venue_id: campaign.venue_id, guest_id: guest.id,
             status: 'sent', sent_at: new Date().toISOString(),

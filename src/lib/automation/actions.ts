@@ -76,7 +76,7 @@ const sendWhatsApp: ActionHandler = async ({ config, context, dryRun }) => {
   }
 
   try {
-    await sendText(phoneId, token, phone, message)
+    await sendText(phoneId, token, phone, message, venue.id as string)
     return { type: 'send_whatsapp', outcome: 'executed', detail: `Sent to ${phone}`, resolved }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err)

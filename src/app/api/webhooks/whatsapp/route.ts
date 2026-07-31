@@ -96,14 +96,14 @@ async function handleButtonReply(
     const requestId = buttonReplyId.replace('review_google_', '')
     await tryWrite('whatsapp: mark review clicked (google)', supabase.from('review_requests').update({ status: 'clicked', clicked_at: new Date().toISOString() }).eq('id', requestId))
     const googleUrl = (venue.settings as Record<string, unknown>)?.google_review_url as string || 'https://search.google.com/local/writereview'
-    await sendText(phoneId, token, from, `Thank you! 🙏 Here's your review link:\n${googleUrl}\n\nTakes 30 seconds and means the world to us! ⭐`)
+    await sendText(phoneId, token, from, `Thank you! 🙏 Here's your review link:\n${googleUrl}\n\nTakes 30 seconds and means the world to us! ⭐`, venue.id as string)
     return
   }
 
   if (buttonReplyId?.startsWith('review_feedback_')) {
     const requestId = buttonReplyId.replace('review_feedback_', '')
     await tryWrite('whatsapp: mark review clicked (feedback)', supabase.from('review_requests').update({ status: 'clicked', clicked_at: new Date().toISOString() }).eq('id', requestId))
-    await sendText(phoneId, token, from, `Thank you! We really value your feedback. 💬\n\nPlease share your thoughts — what did you enjoy, and is there anything we could improve?`)
+    await sendText(phoneId, token, from, `Thank you! We really value your feedback. 💬\n\nPlease share your thoughts — what did you enjoy, and is there anything we could improve?`, venue.id as string)
   }
 }
 
@@ -204,7 +204,12 @@ async function handleTextMessage(
       reason:
         result.reason === 'not_configured'
           ? 'Assistant is not configured, so this message was not answered'
-          : `Assistant could not reply: ${result.message}`,
+          : result.reason === 'overloaded' || result.reason === 'timeout'
+            // Worth saying plainly: the guest asked something answerable and
+            // the model was simply unavailable, so a person replying now loses
+            // nothing. A generic "could not reply" reads like a broken bot.
+            ? `The assistant was temporarily unavailable (${result.reason}) — this message is worth answering by hand`
+            : `Assistant could not reply: ${result.message}`,
       guestLabel: guest.name ?? msg.from,
       lastMessage: msg.text,
     })
@@ -224,7 +229,7 @@ async function handleTextMessage(
     sentiment: reply.sentiment,
   }))
 
-  await sendText(phoneId, token, msg.from, reply.message)
+  await sendText(phoneId, token, msg.from, reply.message, venue.id as string)
 
   // A reservation is only ever captured, never confirmed.
   if (reply.reservation) {

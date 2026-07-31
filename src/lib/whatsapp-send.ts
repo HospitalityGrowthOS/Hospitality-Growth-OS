@@ -15,6 +15,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { tryWrite } from '@/lib/db'
 import { sendText } from './whatsapp'
+import { isDemoSettings } from '@/lib/demo'
 
 const GRAPH_API = 'https://graph.facebook.com/v21.0'
 
@@ -55,11 +56,34 @@ export async function resolveCredentials(venueId?: string): Promise<Credentials 
       const supabase = getAdminClient()
       const { data } = await supabase
         .from('venues')
-        .select('whatsapp_phone_number_id, whatsapp_access_token')
+        .select('whatsapp_phone_number_id, whatsapp_access_token, settings')
         .eq('id', venueId)
         .single()
 
-      const v = data as { whatsapp_phone_number_id?: string; whatsapp_access_token?: string } | null
+      const v = data as {
+        whatsapp_phone_number_id?: string
+        whatsapp_access_token?: string
+        settings?: Record<string, unknown>
+      } | null
+
+      // A demo venue never sends. Its guests are invented, so every message is
+      // at best wasted quota and at worst a real message to a stranger whose
+      // number the fixture happened to land on.
+      //
+      // The guard belongs here rather than in each dispatcher because this is
+      // the single point every outbound WhatsApp passes through — review
+      // requests, campaigns and automation actions alike. Returning null makes
+      // the send a logged stub.
+      //
+      // Learned the hard way: seeding the Golden Demo Venue put 446 review
+      // requests in the queue and the dispatcher sent all of them to Meta,
+      // which rejected them as "not in allowed list". On a venue with a
+      // verified number they would have gone out.
+      if (isDemoSettings(v?.settings)) {
+        console.log(`[whatsapp] suppressed — venue ${venueId} is a demo venue`)
+        return null
+      }
+
       if (v?.whatsapp_phone_number_id && v?.whatsapp_access_token) {
         return { phoneNumberId: v.whatsapp_phone_number_id, accessToken: v.whatsapp_access_token }
       }
@@ -169,7 +193,8 @@ export async function sendFreeform(params: {
       creds.phoneNumberId,
       creds.accessToken,
       normalizePhone(params.to),
-      params.body
+      params.body,
+      params.venueId
     ) as { messages?: Array<{ id: string }> }
     return { ok: true, messageId: data.messages?.[0]?.id }
   } catch (err) {

@@ -87,7 +87,8 @@ export async function POST(req: NextRequest) {
         venue.whatsapp_phone_number_id,
         venue.whatsapp_access_token,
         body.phone,
-        `Welcome to ${venue.name} Loyalty! 🎉\n\nHi ${firstName}! You've earned ${welcomePoints} welcome points 🥉\n\nYour QR Code: *${qrCode}*\nShow this at the counter to earn & redeem points.\n\n🥉 Bronze → 🥈 Silver at 500pts\n🥈 Silver → 🥇 Gold at 1,500pts`
+        `Welcome to ${venue.name} Loyalty! 🎉\n\nHi ${firstName}! You've earned ${welcomePoints} welcome points 🥉\n\nYour QR Code: *${qrCode}*\nShow this at the counter to earn & redeem points.\n\n🥉 Bronze → 🥈 Silver at 500pts\n🥈 Silver → 🥇 Gold at 1,500pts`,
+        venue.id as string
       )
     }
 

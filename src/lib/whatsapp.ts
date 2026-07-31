@@ -1,14 +1,20 @@
+import { isDemoVenue, logSuppressed } from '@/lib/demo'
+
 const GRAPH_API = 'https://graph.facebook.com/v18.0'
 
 // ─── Send text ────────────────────────────────────────────────
-export async function sendText(phoneNumberId: string, token: string, to: string, text: string) {
+export async function sendText(
+  phoneNumberId: string, token: string, to: string, text: string,
+  /** Pass this. It is what stops a demo venue messaging invented guests. */
+  venueId?: string
+) {
   return call(phoneNumberId, token, {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
     to,
     type: 'text',
     text: { preview_url: false, body: text },
-  })
+  }, venueId, to)
 }
 
 // ─── Send interactive (buttons) ───────────────────────────────
@@ -18,7 +24,9 @@ export async function sendInteractive(
   to: string,
   bodyText: string,
   buttons: Array<{ id: string; title: string }>,
-  footerText?: string
+  footerText?: string,
+  /** Pass this. It is what stops a demo venue messaging invented guests. */
+  venueId?: string
 ) {
   return call(phoneNumberId, token, {
     messaging_product: 'whatsapp',
@@ -32,7 +40,7 @@ export async function sendInteractive(
         buttons: buttons.map(b => ({ type: 'reply', reply: { id: b.id, title: b.title } })),
       },
     },
-  })
+  }, venueId, to)
 }
 
 // ─── Mark read ────────────────────────────────────────────────
@@ -100,7 +108,14 @@ export function parsePayload(payload: Record<string, unknown>): InboundMessage |
 }
 
 // ─── Internal fetch ───────────────────────────────────────────
-async function call(phoneNumberId: string, token: string, body: unknown) {
+async function call(phoneNumberId: string, token: string, body: unknown, venueId?: string, to = '') {
+  // Every outbound message in this module passes through here, which is why
+  // the demo check sits at this level rather than in each of the five callers.
+  if (await isDemoVenue(venueId)) {
+    logSuppressed('whatsapp', venueId!, to)
+    return { messages: [{ id: 'stub' }], stub: true }
+  }
+
   const res = await fetch(`${GRAPH_API}/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

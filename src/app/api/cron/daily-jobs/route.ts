@@ -12,6 +12,7 @@ import { formatMoneyShort } from '@/lib/money'
 import { sendText } from '@/lib/whatsapp'
 import { generateWeeklyReport } from '@/lib/claude'
 import { getTierEmoji } from '@/lib/utils'
+import { tierThresholds } from '@/lib/tiers'
 
 /**
  * Sends a message, treating failure as expected rather than fatal.
@@ -28,10 +29,11 @@ async function trySend(
   token: string,
   phone: string,
   message: string,
-  context: string
+  context: string,
+  venueId?: string
 ): Promise<boolean> {
   try {
-    await sendText(phoneId, token, phone, message)
+    await sendText(phoneId, token, phone, message, venueId)
     return true
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err)
@@ -90,7 +92,8 @@ export async function GET(req: NextRequest) {
 
         await trySend(phoneId, token, guest.phone,
           `🎂 Happy Birthday, ${firstName}!\n\nAll of us at *${venue.name}* wish you a wonderful day! 🎉\n\nWe've added *${bonusPoints} bonus points* to your loyalty balance as our birthday gift to you.\n\n${getTierEmoji(m.tier)} See you soon!`,
-          `birthday/${m.id}`
+          `birthday/${m.id}`,
+          venueId
         )
         birthdaySent++
       }
@@ -117,7 +120,8 @@ export async function GET(req: NextRequest) {
 
         const sent = await trySend(phoneId, token, guest.phone,
           `Hi ${firstName}, we miss you! 🥺\n\nIt's been a while since we've seen you at *${venue.name}*.\n\nWe'd love to welcome you back with a *${money(voucherAmount)} credit* on your next visit — just show this message.\n\nValid for the next 7 days. See you soon! ❤️`,
-          `winback/${m.id}`
+          `winback/${m.id}`,
+          venueId
         )
         if (sent) winbackSent++
       }
@@ -133,7 +137,7 @@ export async function GET(req: NextRequest) {
       .gte('points_balance', 400)   // within 100pts of silver (500)
       .lt('points_balance', 500)
 
-    const silverPush = (settings.tier_thresholds as { silver: number })?.silver || 500
+    const silverPush = tierThresholds(settings).silver
 
     if (closeMembersRaw?.length && phoneId && token) {
       for (const m of closeMembersRaw) {
@@ -144,7 +148,8 @@ export async function GET(req: NextRequest) {
 
         await trySend(phoneId, token, guest.phone,
           `${firstName}, you're *${ptsNeeded} points* away from Silver! 🥈\n\nVisit ${venue.name} and unlock exclusive Silver perks:\n• Priority seating\n• 2× points every Tuesday\n• Monthly surprise reward\n\nYou're almost there! 🚀`,
-          `tierpush/${m.id}`
+          `tierpush/${m.id}`,
+          venueId
         )
       }
     }
