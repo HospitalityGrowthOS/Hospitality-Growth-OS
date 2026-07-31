@@ -14,13 +14,15 @@ interface SidebarProps {
   planName?: string | null
   reviewsBadge?: number
   aiBadge?: number
+  /** Booking requests the owner has not answered yet. */
+  reservationsBadge?: number
   /** The venue currently being viewed. */
   currentVenueId?: string | null
   /** Every venue this owner has. The switcher only appears when there are two or more. */
   venues?: { id: string; name: string }[]
 }
 
-type BadgeKey = 'reviews' | 'ai'
+type BadgeKey = 'reviews' | 'ai' | 'reservations'
 
 interface NavItem {
   href: string
@@ -41,6 +43,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'Guest Systems',
     items: [
+      { href: '/dashboard/reservations', label: 'Reservations', icon: CalendarIcon, badgeKey: 'reservations' },
       { href: '/dashboard/visits', label: 'Visits', icon: ReceiptIcon },
       { href: '/dashboard/reviews', label: 'Reviews', icon: StarIcon, badgeKey: 'reviews' },
       { href: '/dashboard/loyalty', label: 'Loyalty Members', icon: HeartIcon },
@@ -65,8 +68,8 @@ const NAV: { section: string; items: NavItem[] }[] = [
   },
 ]
 
-export default function Sidebar({ userName, userInitials, userEmail, venueName, venueInitials, planName, reviewsBadge = 0, aiBadge = 0, currentVenueId = null, venues = [] }: SidebarProps) {
-  const badgeCounts: Record<BadgeKey, number> = { reviews: reviewsBadge, ai: aiBadge }
+export default function Sidebar({ userName, userInitials, userEmail, venueName, venueInitials, planName, reviewsBadge = 0, aiBadge = 0, reservationsBadge = 0, currentVenueId = null, venues = [] }: SidebarProps) {
+  const badgeCounts: Record<BadgeKey, number> = { reviews: reviewsBadge, ai: aiBadge, reservations: reservationsBadge }
   const pathname = usePathname()
   const router = useRouter()
   const [switcherOpen, setSwitcherOpen] = useState(false)
@@ -227,6 +230,9 @@ export default function Sidebar({ userName, userInitials, userEmail, venueName, 
 }
 
 // ── Icons ─────────────────────────────────────────────────────
+function CalendarIcon({ className }: { className?: string }) {
+  return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+}
 function ReceiptIcon({ className }: { className?: string }) {
   return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5z"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="14" y2="12"/></svg>
 }

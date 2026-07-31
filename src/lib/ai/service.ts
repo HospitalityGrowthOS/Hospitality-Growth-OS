@@ -8,6 +8,10 @@
  */
 
 import { createAdminClient } from '@/lib/supabase/server'
+// Imported from the module, not the barrel — the barrel pulls in the executor,
+// which imports this file back and would close a static cycle.
+import { emitEvent } from '@/lib/automation/events'
+import { tryWrite } from '@/lib/db'
 import { callModel, isAiConfigured } from './client'
 import {
   ANALYSIS_SYSTEM,
@@ -350,6 +354,45 @@ export async function captureReservationRequest(params: {
       console.error('[ai] reservation capture failed:', error.message)
       return null
     }
+
+    // Until now a captured reservation went nowhere. The row was written and
+    // that was the end of it: no notification, no event, and the only trace in
+    // the product was a "pending reservations" counter on the AI page. A guest
+    // could ask for a table, be answered politely, and have the request sit
+    // unread — which is worse than not offering booking at all.
+    //
+    // `reservation.created` is also the trigger the shipped "Reservation
+    // reminder" template listens for. Nothing emitted it, so a venue could
+    // install and activate that automation and it would never fire once.
+    await emitEvent({
+      venueId: params.venueId,
+      name: 'reservation.created',
+      guestId: params.guestId ?? null,
+      payload: {
+        reservation_id: data?.id ?? null,
+        date: params.details.date,
+        time: params.details.time,
+        party_size: params.details.partySize,
+        notes: params.details.notes ?? null,
+        channel: params.channel ?? 'whatsapp',
+        guest_name: params.guestName ?? null,
+      },
+    })
+
+    const who = params.guestName ?? params.guestPhone ?? 'A guest'
+    await tryWrite('ai: notify owner of reservation', supabase.from('notifications').insert({
+      venue_id: params.venueId,
+      type: 'reservation_request',
+      title: `New reservation request — ${who}`,
+      body: `${params.details.partySize} on ${params.details.date} at ${params.details.time}`
+        + (params.details.notes ? ` · ${params.details.notes}` : ''),
+      icon: '📅',
+      is_read: false,
+      related_id: data?.id ?? null,
+      related_type: 'reservation_request',
+      action_url: '/dashboard/reservations',
+    }))
+
     return data?.id ?? null
   } catch (err) {
     console.error('[ai] reservation capture error:', err)

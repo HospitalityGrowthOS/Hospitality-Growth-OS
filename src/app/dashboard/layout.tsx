@@ -30,16 +30,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Real nav badge counts — these were hardcoded, showing "3" and "2" forever.
   let reviewsBadge = 0
   let aiBadge = 0
+  let reservationsBadge = 0
   if (venue) {
     const admin = await createAdminClient()
-    const [{ count: negative }, { count: escalated }] = await Promise.all([
+    const [{ count: negative }, { count: escalated }, { count: unanswered }] = await Promise.all([
       admin.from('action_items').select('id', { count: 'exact', head: true })
         .eq('venue_id', venue.id).eq('type', 'negative_feedback').eq('status', 'pending'),
       admin.from('action_items').select('id', { count: 'exact', head: true })
         .eq('venue_id', venue.id).eq('type', 'conversation_escalation').eq('status', 'pending'),
+      // A booking request nobody has replied to is the most time-sensitive
+      // thing in the product — the guest is waiting on an answer.
+      admin.from('reservation_requests').select('id', { count: 'exact', head: true })
+        .eq('venue_id', venue.id).eq('status', 'pending'),
     ])
     reviewsBadge = negative ?? 0
     aiBadge = escalated ?? 0
+    reservationsBadge = unanswered ?? 0
   }
 
   const isTrialing = !subscriptionStatus || subscriptionStatus === 'trial' || subscriptionStatus === 'trialing'
@@ -58,6 +64,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         venues={ownedVenues.map(v => ({ id: v.id, name: v.name }))}
         reviewsBadge={reviewsBadge}
         aiBadge={aiBadge}
+        reservationsBadge={reservationsBadge}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Trial banner */}
