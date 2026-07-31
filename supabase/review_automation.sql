@@ -42,7 +42,7 @@ SELECT cron.schedule(
     url     := 'https://www.hospitalitygrowthos.com/api/reviews/send-request',
     headers := jsonb_build_object(
                  'Content-Type',  'application/json',
-                 'Authorization', 'Bearer ' || current_setting('app.cron_secret', true)
+                 'Authorization', 'Bearer REPLACE_WITH_YOUR_CRON_SECRET'
                ),
     body    := '{}'::jsonb
   );
@@ -50,5 +50,24 @@ SELECT cron.schedule(
 );
 
 -- 3. Cron secret ---------------------------------------------------------------
--- Must match CRON_SECRET in Vercel. Replace the value below before running.
-ALTER DATABASE postgres SET app.cron_secret = 'REPLACE_WITH_YOUR_CRON_SECRET';
+-- The secret is inlined in the command above, NOT read from a database setting.
+--
+-- This file used to end with:
+--
+--     ALTER DATABASE postgres SET app.cron_secret = '...';
+--
+-- which Supabase rejects — the SQL editor role lacks the privilege and the
+-- statement fails with "42501: permission denied to set parameter". The damage
+-- is that it fails quietly in effect: current_setting(..., true) then returns
+-- an empty string instead of erroring, the job sends a header of literally
+-- "Bearer ", and every call is rejected 401 while cron.job_run_details reports
+-- the run as a success. The same trap cost hours on the automation cron before
+-- net._http_response revealed what was actually happening.
+--
+-- Replace the placeholder above with the real CRON_SECRET from Vercel before
+-- running this file. Do NOT commit the real value — this repository is public.
+--
+-- Verify afterwards with:
+--     SELECT id, status_code, left(content::text, 90), created
+--     FROM net._http_response ORDER BY id DESC LIMIT 8;
+-- A 401 means the secret does not match.
