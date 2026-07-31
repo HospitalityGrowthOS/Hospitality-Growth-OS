@@ -78,6 +78,15 @@ export async function POST(req: NextRequest) {
   let failed = 0
   let stubbed = 0
 
+  // Why sends failed, returned in the response body.
+  //
+  // pg_cron stores that body in net._http_response, so a venue's failures
+  // become one SQL query instead of a hunt through Vercel's runtime logs.
+  // Without this a failing dispatch and an idle queue are indistinguishable
+  // from the database — the request simply stays 'pending' either way, which
+  // has now caused three separate misdiagnoses of this exact endpoint.
+  const errors: string[] = []
+
   for (const request of requests) {
     const guest = request.guest_id ? guestsById.get(request.guest_id) : undefined
     const venue = venuesById.get(request.venue_id)
@@ -165,11 +174,16 @@ export async function POST(req: NextRequest) {
         `[review-dispatch] send failed for ${request.id}${stale ? ' (abandoned — too old)' : ' (will retry)'}:`,
         result.error
       )
+      // Trimmed: this ends up in a database column, not a log file.
+      if (errors.length < 5) errors.push(`${channel}: ${String(result.error).slice(0, 180)}`)
       failed++
     }
   }
 
-  return NextResponse.json({ processed: requests.length, sent, skipped, failed, stubbed })
+  return NextResponse.json({
+    processed: requests.length, sent, skipped, failed, stubbed,
+    ...(errors.length ? { errors } : {}),
+  })
 }
 
 // Health check / manual trigger
