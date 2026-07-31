@@ -13,11 +13,22 @@ const FeedbackSchema = z.object({
  * A request is still open for feedback while it is queued or delivered.
  * Anything else (positive / negative / opted_out) has already been answered.
  */
-// 'clicked' is open too — the guest tapped through to the form, which is the
-// step *before* answering, not a completed response. Omitting it meant that
-// once the webhook could write 'clicked' (see supabase/review_request_status.sql)
-// every guest who followed the link would be turned away as already-answered.
-const OPEN_STATUSES = new Set(['pending', 'sent', 'clicked'])
+/**
+ * Only a real answer closes the form.
+ *
+ * This was an allow-list of open statuses, which meant every status outside it
+ * — 'clicked', 'failed', 'unreachable' — turned the guest away with "your
+ * feedback has already been recorded". That message was simply false: nothing
+ * had been recorded, and the guest was told otherwise while being denied the
+ * chance to say anything.
+ *
+ * Inverted deliberately. A status this file has never heard of now leaves the
+ * form open, because wrongly accepting a second answer is a trivial problem and
+ * wrongly refusing a guest who is holding the link is not. Delivery state is
+ * also irrelevant here: 'unreachable' means we could not send it, not that they
+ * cannot answer it — if they reached the page, they reached it.
+ */
+const ANSWERED_STATUSES = new Set(['positive', 'negative', 'completed'])
 
 /** Ratings at or above this go to Google; below it stay private. */
 const PUBLIC_REVIEW_THRESHOLD = 4
@@ -39,7 +50,7 @@ export async function GET(
       return NextResponse.json({ error: 'Request not found' }, { status: 404 })
     }
 
-    if (!OPEN_STATUSES.has(data.status)) {
+    if (ANSWERED_STATUSES.has(data.status)) {
       return NextResponse.json(
         { error: 'already_completed', status: data.status },
         { status: 409 }
@@ -91,7 +102,7 @@ export async function POST(
     if (!existing) {
       return NextResponse.json({ error: 'Request not found' }, { status: 404 })
     }
-    if (!OPEN_STATUSES.has(existing.status)) {
+    if (ANSWERED_STATUSES.has(existing.status)) {
       return NextResponse.json(
         { error: 'already_completed', status: existing.status },
         { status: 409 }

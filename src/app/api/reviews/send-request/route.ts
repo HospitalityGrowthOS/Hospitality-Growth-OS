@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
   const { data: requests, error } = await supabase
     .from('review_requests')
-    .select('id, venue_id, guest_id, guest_name, guest_phone, channel, scheduled_for')
+    .select('id, venue_id, guest_id, guest_name, guest_phone, guest_email, channel, scheduled_for')
     .eq('status', 'pending')
     .lte('scheduled_for', now)
     .limit(BATCH_LIMIT)
@@ -84,7 +84,10 @@ export async function POST(req: NextRequest) {
 
     // Fall back to the denormalized fields when there is no linked guest row.
     const phone = guest?.phone ?? request.guest_phone
-    const email = guest?.email ?? null
+    // Mirrors the phone fallback. Without it an email request for a walk-in
+    // with no `guests` row had nowhere to carry an address, so the dispatcher
+    // resolved no channel and wrote the request off as unreachable.
+    const email = guest?.email ?? request.guest_email
     const name  = guest?.name  ?? request.guest_name ?? 'there'
 
     // Honour the channel already on the row where it can still work, otherwise

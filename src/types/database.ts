@@ -1435,6 +1435,7 @@ export interface Database {
           sent_at: string | null
           clicked_at: string | null
           review_url: string | null
+          guest_email: string | null
         }
         Insert: {
           id?: string
@@ -1453,6 +1454,7 @@ export interface Database {
           sent_at?: string | null
           clicked_at?: string | null
           review_url?: string | null
+          guest_email?: string | null
         }
         Update: {
           id?: string
@@ -1471,6 +1473,7 @@ export interface Database {
           sent_at?: string | null
           clicked_at?: string | null
           review_url?: string | null
+          guest_email?: string | null
         }
         Relationships: [
           {
