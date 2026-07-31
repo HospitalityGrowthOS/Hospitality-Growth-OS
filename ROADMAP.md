@@ -75,9 +75,9 @@ venue already has — not that it takes their orders.
 | 1 | Ask a *Steuerberater* what registering the business costs and takes | Founder | Unblocks Meta **and** Stripe live **and** contracts. Highest leverage item on this page |
 | 2 | Purge internal test data from production | Eng | Skews every metric today |
 | 3 | Verify Resend domain (DNS records only) | Founder | ~30 min. No entity required |
-| 4 | Email as a working channel | Eng | ~1.5 days. Fallback, **not** a repositioning |
-| 5 | Multi-venue support (`.single()` limit) | Eng | Blocks the Golden Demo Venue — see debt register |
-| 6 | Golden Demo Venue | Eng | One handcrafted restaurant. **Not** the Demo Factory |
+| 4 | Email as a working channel | Eng | ~1.5 days. Fallback, **not** a repositioning. Scope fixed in [docs/capabilities/email-channel.md](docs/capabilities/email-channel.md) |
+| 5 | ~~Multi-venue support (`.single()` limit)~~ | Eng | **Done** |
+| 6 | ~~Golden Demo Venue~~ | Eng | **Done** — Bistro Saint-Laurent, Québec. 60-check audit via `npm run demo:verify` |
 | 7 | Review landing / pricing / onboarding / billing | Both | Mostly already built |
 | 8 | Talk to ten restaurants | Founder | Costs nothing. Not blocked by anything |
 | 9 | One free pilot | Founder | No entity, no Stripe, no Meta needed |
@@ -92,7 +92,7 @@ completes.
 
 ### P0 — must exist before customer #1
 
-- Email channel working end to end
+- Email channel working end to end — defined in [docs/capabilities/email-channel.md](docs/capabilities/email-channel.md)
 - Production data clean
 - Multi-venue support
 - Golden Demo Venue
@@ -221,6 +221,43 @@ paying customer.
 | 33 | Demo Factory — Business Simulation Platform | Frozen |
 | ADR 0001 | Capability Registry | Accepted, unimplemented by design |
 
+### Frozen subsystems
+
+A frozen subsystem takes **bug fixes only**. Anything else waits until a real customer demonstrates
+the requirement — not until we imagine one might.
+
+| Subsystem | Frozen | Covers |
+|---|---|---|
+| Reservations | 2026-07-31 | Booking capture, the reservations screen, status lifecycle, guest confirmation, `reservation.*` events |
+
+**A bug, for this purpose, is one of three things.** The product does something it says it does not,
+loses or corrupts data, or shows a number that is not true. Nothing else qualifies.
+
+That definition is not academic — every fix in the reservations work met it. A guest could book and
+never be answered (says it does not). A no-show could not be recorded (loses data). The review
+completion rate read 100% for every venue, permanently (shows a number that is not true).
+
+**Explicitly out of scope while frozen**, absent a named customer asking: table and floor
+management, deposits or card-holding, waitlists, guest self-service cancellation, SMS as a booking
+channel, capacity or pacing rules, calendar sync, and multi-service-period configuration. Each is a
+reasonable thing for a restaurant to want. None is a reason to reopen the subsystem on our own
+initiative.
+
+### Every module extends the audit
+
+`scripts/golden-demo/verify.ts` is a standing obligation, not a one-off. A new module ships with the
+checks that prove its data agrees with everything already there.
+
+This has paid for itself repeatedly: it caught KPI snapshots drifting from their source tables, a
+status the database was silently rejecting, guest acquisition decaying in a way only generated data
+does, and a shipped automation template listening for an event nothing emitted.
+
+One rule about the checks themselves — **a check must be proved capable of failing.** Several bugs
+this quarter hid behind instruments that could only report success: pg_cron reported healthy runs
+while every HTTP call was rejected 401, and a review completion rate computed its denominator from a
+status the database refused to store, so it read 100% forever. An unfalsifiable check is worse than
+no check, because it is trusted.
+
 This file is the successor to what would have been Chapter 34. It is markdown in git rather than a
 bible chapter because roadmaps change weekly and architecture should not.
 
@@ -287,3 +324,7 @@ Recording *what* was decided and *why*, so good decisions are not quietly revers
 | 2026-07-30 | Golden Demo Venue, not Demo Factory | A convincing demo is 1–2 days; a simulation platform is weeks. Build the engine when reuse justifies it |
 | 2026-07-30 | Architecture frozen at Chapters 30–33 | The remaining risk is market validation. No engineering problem left is worth solving before a customer conversation |
 | 2026-07-30 | Free pilot before paid | Charging requires an entity; learning does not |
+| 2026-07-31 | Reservations frozen after the confirmation loop closed | The subsystem is coherent end to end and no customer has used it. Further work would be engineering completeness, not customer value |
+| 2026-07-31 | "Bug" defined narrowly and written down | Freezes erode when *bug* is elastic. Three tests: says it does not, loses data, or shows an untrue number |
+| 2026-07-31 | Every new module extends the audit | The audit has found more real defects than any other practice here, including four that had already shipped green |
+| 2026-07-31 | A check must be demonstrated to fail | Instruments that can only report success caused the two most expensive misdiagnoses of the quarter |
