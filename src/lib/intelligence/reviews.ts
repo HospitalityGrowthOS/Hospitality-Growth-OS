@@ -9,8 +9,24 @@
 import { rate, windowBounds, type RawData, type RawReviewRequest } from './gather'
 import type { ReviewIntelligence } from './types'
 
-/** A request counts as "sent" once it has left the queue. */
-const SENT_STATUSES = new Set(['sent', 'positive', 'negative'])
+/** Terminal statuses — the guest answered. */
+const ANSWERED_STATUSES = new Set(['positive', 'negative', 'completed'])
+
+/**
+ * Whether a request actually reached the guest.
+ *
+ * Derived from `sent_at` rather than the status string. The status alone was
+ * not trustworthy: the send path writes 'sent', which the database rejected
+ * outright for a long period, leaving delivered requests marked 'pending'. A
+ * timestamp is written by the same update but survives as evidence, and a row
+ * that was answered was self-evidently delivered whatever its status says.
+ *
+ * Requests still queued are excluded from the denominator on purpose — a venue
+ * should not look unpopular because a message has not gone out yet.
+ */
+function wasSent(r: RawReviewRequest): boolean {
+  return r.sent_at != null || r.rating != null || ANSWERED_STATUSES.has(r.status) || r.status === 'sent'
+}
 
 /** Ratings at or above this are treated as positive, matching the feedback flow. */
 export const POSITIVE_THRESHOLD = 4
@@ -19,7 +35,7 @@ export function computeReviewIntelligence(raw: RawData, now = Date.now()): Revie
   const { since90 } = windowBounds(now)
   const requests = raw.reviewRequests
 
-  const sent = requests.filter(r => SENT_STATUSES.has(r.status))
+  const sent = requests.filter(wasSent)
   const completed = requests.filter(r => r.rating != null)
 
   const positiveCount = completed.filter(r => (r.rating ?? 0) >= POSITIVE_THRESHOLD).length

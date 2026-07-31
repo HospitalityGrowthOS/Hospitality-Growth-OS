@@ -58,6 +58,7 @@ export interface RawReviewRequest {
   feedback: string | null
   created_at: string
   completed_at: string | null
+  sent_at: string | null
 }
 
 export interface RawTransaction {
@@ -146,8 +147,11 @@ export async function gatherRawData(venueId: string): Promise<RawData> {
       .limit(2000),
     supabase
       .from('review_requests')
-      .select('id, status, rating, feedback, created_at, completed_at')
+      .select('id, status, rating, feedback, created_at, completed_at, sent_at')
       .eq('venue_id', venueId)
+      // Newest first: a venue past the cap loses its oldest history rather than
+      // its most recent, which is the half that every figure here is about.
+      .order('created_at', { ascending: false })
       .limit(1000),
     supabase
       .from('loyalty_transactions')

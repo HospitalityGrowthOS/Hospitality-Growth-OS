@@ -13,7 +13,11 @@ const FeedbackSchema = z.object({
  * A request is still open for feedback while it is queued or delivered.
  * Anything else (positive / negative / opted_out) has already been answered.
  */
-const OPEN_STATUSES = new Set(['pending', 'sent'])
+// 'clicked' is open too — the guest tapped through to the form, which is the
+// step *before* answering, not a completed response. Omitting it meant that
+// once the webhook could write 'clicked' (see supabase/review_request_status.sql)
+// every guest who followed the link would be turned away as already-answered.
+const OPEN_STATUSES = new Set(['pending', 'sent', 'clicked'])
 
 /** Ratings at or above this go to Google; below it stay private. */
 const PUBLIC_REVIEW_THRESHOLD = 4
