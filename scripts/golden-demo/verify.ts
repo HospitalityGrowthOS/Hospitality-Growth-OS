@@ -44,11 +44,11 @@ async function main() {
     return out
   }
 
-  const guests = await all<{ id: string; name: string; loyalty_points: number; total_visits: number; total_spent: number; loyalty_tier: string; created_at: string }>('guests', 'id, name, loyalty_points, total_visits, total_spent, loyalty_tier, created_at')
+  const guests = await all<{ id: string; name: string; loyalty_points: number; total_visits: number; total_spent: number; loyalty_tier: string; created_at: string; email: string | null; phone: string | null; whatsapp_opted_in: boolean | null }>('guests', 'id, name, loyalty_points, total_visits, total_spent, loyalty_tier, created_at, email, phone, whatsapp_opted_in')
   const visits = await all<{ id: string; guest_id: string; visited_at: string; spend_amount: number }>('visits', 'id, guest_id, visited_at, spend_amount')
   const members = await all<{ id: string; guest_id: string; points_balance: number; points_earned_total: number; points_redeemed_total: number; tier: string }>('loyalty_members', 'id, guest_id, points_balance, points_earned_total, points_redeemed_total, tier')
   const ledger = await all<{ member_id: string; points: number; type: string; created_at: string }>('loyalty_transactions', 'member_id, points, type, created_at')
-  const requests = await all<{ guest_id: string; visit_id: string; rating: number | null; sent_at: string; completed_at: string | null }>('review_requests', 'guest_id, visit_id, rating, sent_at, completed_at')
+  const requests = await all<{ guest_id: string; visit_id: string; rating: number | null; sent_at: string; completed_at: string | null; channel: string | null; status: string }>('review_requests', 'guest_id, visit_id, rating, sent_at, completed_at, channel, status')
   const reviews = await all<{ guest_id: string; rating: number; review_date: string }>('reviews', 'guest_id, rating, review_date')
   const snapshots = await all<Record<string, number | string | null>>('kpi_snapshots', '*')
   const sends = await all<{ campaign_id: string; guest_id: string; status: string; conversion_amount: number | null }>('campaign_sends', 'campaign_id, guest_id, status, conversion_amount')
@@ -327,6 +327,40 @@ async function main() {
   check('answered requests record when they were handled',
     reservations.filter(r => r.status !== 'pending').every(r => r.handled_at !== null),
     `${reservations.filter(r => r.status === 'pending').length} still awaiting a reply`)
+
+  // ── Channels ─────────────────────────────────────────────────────────────
+  // The channel recorded on a request must be one that could actually carry
+  // it. This column existed from the start and nothing read it, so every
+  // request went out over WhatsApp regardless — leaving guests who never opted
+  // in with requests addressed to a route the product could not use.
+  console.log('\nChannels')
+  const guestById = new Map(guests.map(g => [g.id, g]))
+
+  const misrouted = requests.filter(r => {
+    const g = r.guest_id ? guestById.get(r.guest_id) : undefined
+    if (!g) return false
+    if (r.channel === 'email') return !g.email
+    if (r.channel === 'whatsapp') return !g.phone || g.whatsapp_opted_in === false
+    return false
+  })
+  check('every request is addressed to a channel that could reach the guest',
+    misrouted.length === 0,
+    misrouted.length ? `${misrouted.length} misrouted` : `${requests.length} requests`)
+
+  const reachable = guests.filter(g => (g.phone && g.whatsapp_opted_in !== false) || g.email)
+  const contacted = new Set(requests.map(r => r.guest_id))
+  const unreachedButReachable = reachable.filter(g =>
+    !contacted.has(g.id) && (visitAgg.get(g.id)?.n ?? 0) > 0)
+  check('no guest the product can reach was left with no request at all',
+    unreachedButReachable.length / Math.max(1, reachable.length) < 0.25,
+    `${reachable.length - unreachedButReachable.length} of ${reachable.length} reachable guests contacted`)
+
+  const byChannel = requests.reduce<Record<string, number>>((acc, r) => {
+    const k = r.channel ?? '(none)'; acc[k] = (acc[k] ?? 0) + 1; return acc
+  }, {})
+  check('both channels are actually exercised',
+    (byChannel.email ?? 0) > 0 && (byChannel.whatsapp ?? 0) > 0,
+    Object.entries(byChannel).map(([k, n]) => `${k}:${n}`).join(' · '))
 
   // ── Automation wiring ────────────────────────────────────────────────────
   // A template that listens for an event nothing emits is a dead feature: the

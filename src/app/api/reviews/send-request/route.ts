@@ -2,17 +2,23 @@
  * Review automation dispatcher.
  *
  * Polled every 5 minutes by pg_cron (see supabase/review_automation.sql).
- * Sends the approved `review_request` template for every pending request whose
- * 45-minute delay has elapsed.
+ * Sends every pending request whose 45-minute delay has elapsed, over whichever
+ * channel can actually reach the guest.
  *
- * Business-initiated messages must use an approved template — a free-form or
- * interactive message would be rejected, since the guest has not messaged us
- * within the last 24 hours.
+ * WhatsApp goes as an approved template: a business-initiated free-form message
+ * would be rejected, since the guest has not messaged us in the last 24 hours.
+ * Email carries the same `/feedback/[requestId]` link, so a reply arrives
+ * through one lifecycle no matter how it was asked for.
+ *
+ * This used to send WhatsApp unconditionally and ignore `review_requests.channel`
+ * entirely, which left every guest who had not opted into WhatsApp unreachable.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { tryWrite } from '@/lib/db'
 import { sendReviewRequest } from '@/lib/whatsapp-send'
+import { sendReviewRequestEmail } from '@/lib/email'
+import { usableChannel } from '@/lib/channels'
 
 const BATCH_LIMIT = 50
 
@@ -39,7 +45,7 @@ export async function POST(req: NextRequest) {
 
   const { data: requests, error } = await supabase
     .from('review_requests')
-    .select('id, venue_id, guest_id, guest_name, guest_phone, scheduled_for')
+    .select('id, venue_id, guest_id, guest_name, guest_phone, channel, scheduled_for')
     .eq('status', 'pending')
     .lte('scheduled_for', now)
     .limit(BATCH_LIMIT)
@@ -57,8 +63,8 @@ export async function POST(req: NextRequest) {
 
   const [{ data: guestRows }, { data: venueRows }] = await Promise.all([
     guestIds.length
-      ? supabase.from('guests').select('id, name, phone, whatsapp_opted_in').in('id', guestIds)
-      : Promise.resolve({ data: [] as { id: string; name?: string; phone?: string; whatsapp_opted_in?: boolean }[] }),
+      ? supabase.from('guests').select('id, name, phone, email, whatsapp_opted_in').in('id', guestIds)
+      : Promise.resolve({ data: [] as { id: string; name?: string; phone?: string; email?: string; whatsapp_opted_in?: boolean }[] }),
     venueIds.length
       ? supabase.from('venues').select('id, name').in('id', venueIds)
       : Promise.resolve({ data: [] as { id: string; name?: string }[] }),
@@ -70,6 +76,7 @@ export async function POST(req: NextRequest) {
   let sent = 0
   let skipped = 0
   let failed = 0
+  let stubbed = 0
 
   for (const request of requests) {
     const guest = request.guest_id ? guestsById.get(request.guest_id) : undefined
@@ -77,34 +84,67 @@ export async function POST(req: NextRequest) {
 
     // Fall back to the denormalized fields when there is no linked guest row.
     const phone = guest?.phone ?? request.guest_phone
+    const email = guest?.email ?? null
     const name  = guest?.name  ?? request.guest_name ?? 'there'
 
-    // Respect opt-out. Only an explicit false blocks the send; a missing guest
-    // row means the request carried its own contact details.
-    if (!phone || guest?.whatsapp_opted_in === false) {
-      await tryWrite('review-dispatch: mark opted_out', supabase
+    // Honour the channel already on the row where it can still work, otherwise
+    // pick one from the contact details we have.
+    const channel = usableChannel(request.channel, {
+      phone, email, whatsappOptedIn: guest?.whatsapp_opted_in,
+    })
+
+    if (!channel) {
+      // No usable channel — this is terminal, not a delay. 'opted_out' was
+      // written here for as long as this file has existed and the constraint
+      // rejected every one of them, so the request stayed pending and the cron
+      // picked it up again every five minutes for a day.
+      await tryWrite('review-dispatch: mark unreachable', supabase
         .from('review_requests')
-        .update({ status: 'opted_out' })
+        .update({ status: 'unreachable' })
         .eq('id', request.id))
       skipped++
       continue
     }
 
-    const result = await sendReviewRequest({
-      phone,
-      guestName: name,
-      venueName: venue?.name ?? 'our venue',
-      requestId: request.id,
-      venueId:   request.venue_id,
-      guestId:   request.guest_id ?? undefined,
-    })
+    const result = channel === 'whatsapp'
+      ? await sendReviewRequest({
+          phone: phone!,
+          guestName: name,
+          venueName: venue?.name ?? 'our venue',
+          requestId: request.id,
+          venueId:   request.venue_id,
+          guestId:   request.guest_id ?? undefined,
+        })
+      : await sendReviewRequestEmail({
+          to: email!,
+          guestName: name,
+          venueName: venue?.name ?? 'our venue',
+          requestId: request.id,
+          venueId:   request.venue_id,
+        })
 
-    if (result.ok) {
+    if (result.ok && result.stub) {
+      // Nothing was sent — no credentials, or a demo venue. Marking this 'sent'
+      // would tell the owner a guest had been contacted who never was, and
+      // would take the request out of the queue for a send that never happened.
+      //
+      // It stays pending so it goes out once the channel works. But a stub is
+      // ok:true, so it never reaches the failure path below — without this the
+      // five-minute cron would retry the same request forever.
+      if ((request.scheduled_for ?? now) < staleBefore) {
+        await tryWrite('review-dispatch: retire un-sendable request', supabase
+          .from('review_requests')
+          .update({ status: 'unreachable' })
+          .eq('id', request.id))
+        console.warn(`[review-dispatch] ${request.id} retired — no channel configured for ${MAX_AGE_HOURS}h`)
+      }
+      stubbed++
+    } else if (result.ok) {
       // If this update is lost, the next run re-sends the same message to the
       // same guest — the log line below is the only warning of that.
       await tryWrite(`review-dispatch: mark sent (${request.id}) — FAILURE MEANS THE GUEST MAY BE MESSAGED TWICE`, supabase
         .from('review_requests')
-        .update({ status: 'sent', sent_at: new Date().toISOString() })
+        .update({ status: 'sent', sent_at: new Date().toISOString(), channel })
         .eq('id', request.id))
       sent++
     } else {
@@ -126,7 +166,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ processed: requests.length, sent, skipped, failed })
+  return NextResponse.json({ processed: requests.length, sent, skipped, failed, stubbed })
 }
 
 // Health check / manual trigger

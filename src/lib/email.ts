@@ -26,19 +26,132 @@ interface LoyaltyWelcomeEmailProps {
   venueId?: string
 }
 
-const TIER_EMOJI: Record<string, string> = { bronze: '🥉', silver: '🥈', gold: '🥇' }
-const TIER_LABEL: Record<string, string> = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' }
+export interface EmailResult {
+  ok: boolean
+  /** True when nothing left the building — no API key, or a demo venue. */
+  stub?: boolean
+  error?: string
+}
 
-export async function sendLoyaltyWelcomeEmail(props: LoyaltyWelcomeEmailProps) {
-  const { to, name, venueName, points, tier, qrCode, memberId, currencySym = '€', thresholds, venueId } = props
+/**
+ * The one place mail is actually sent.
+ *
+ * Both callers route through here so the demo guard and the stub contract
+ * cannot drift apart between them — the guard existing on one mail and not the
+ * other is exactly the kind of gap that let the platform message invented
+ * guests over WhatsApp.
+ */
+async function deliver(params: {
+  to: string
+  subject: string
+  html: string
+  venueId?: string
+}): Promise<EmailResult> {
+  const { to, subject, html, venueId } = params
 
-  // A demo venue's guests are invented, but their email addresses are ordinary
-  // gmail/videotron-looking strings that may well belong to a real person —
-  // a worse failure mode than the reserved 555 phone numbers beside them.
   if (await isDemoVenue(venueId)) {
     logSuppressed('email', venueId!, to)
     return { ok: true, stub: true }
   }
+
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
+    console.log(`[Email stub] → ${to} | Subject: ${subject}`)
+    return { ok: true, stub: true }
+  }
+
+  const from = process.env.EMAIL_FROM || 'onboarding@resend.dev'
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, subject, html }),
+    })
+    if (!res.ok) {
+      const err = await res.text()
+      console.error('[email] Resend error:', err)
+      return { ok: false, error: err }
+    }
+    return { ok: true }
+  } catch (err) {
+    console.error('[email] Send failed:', err)
+    return { ok: false, error: String(err) }
+  }
+}
+
+/**
+ * Asks a guest how their visit went, over email.
+ *
+ * The counterpart of the WhatsApp `review_request` template, for guests who
+ * never opted into WhatsApp — 16 of 164 in the Golden Demo Venue, who until now
+ * the product could not reach by any route it could actually use.
+ *
+ * The link is the same `/feedback/[requestId]` page the WhatsApp button opens,
+ * so a reply arrives through one lifecycle regardless of how it was asked for.
+ */
+export async function sendReviewRequestEmail(params: {
+  to: string
+  guestName?: string | null
+  venueName: string
+  requestId: string
+  venueId: string
+}): Promise<EmailResult> {
+  const { to, guestName, venueName, requestId, venueId } = params
+  const firstName = guestName?.split(' ')[0] || 'there'
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'
+  const link = `${appUrl}/feedback/${requestId}`
+
+  return deliver({
+    to,
+    venueId,
+    subject: `How was your visit to ${venueName}?`,
+    html: buildFeedbackHtml({ firstName, venueName, link }),
+  })
+}
+
+/** Deliberately plain: one question, one button, nothing to unsubscribe from. */
+function buildFeedbackHtml(p: { firstName: string; venueName: string; link: string }): string {
+  return `<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#F7F4EF;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F7F4EF;padding:32px 16px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#FFFFFF;border-radius:12px;padding:32px;">
+        <tr><td>
+          <p style="margin:0 0 16px;font-size:16px;color:#1A1510;">Hi ${escapeHtml(p.firstName)},</p>
+          <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#4A4038;">
+            Thanks for visiting <strong>${escapeHtml(p.venueName)}</strong>. How did we do? It takes
+            about thirty seconds and it genuinely helps a small business like ours.
+          </p>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 24px;">
+            <tr><td style="border-radius:8px;background:#1A1510;">
+              <a href="${p.link}" style="display:inline-block;padding:13px 28px;font-size:15px;font-weight:600;color:#FFFFFF;text-decoration:none;">
+                Leave feedback
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:0;font-size:13px;line-height:1.6;color:#8A7F74;">
+            If the button does not work, paste this into your browser:<br>
+            <span style="color:#6B5F56;word-break:break-all;">${p.link}</span>
+          </p>
+        </td></tr>
+      </table>
+      <p style="margin:20px 0 0;font-size:12px;color:#8A7F74;">Sent by ${escapeHtml(p.venueName)}</p>
+    </td></tr>
+  </table>
+</body></html>`
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string))
+}
+
+const TIER_EMOJI: Record<string, string> = { bronze: '🥉', silver: '🥈', gold: '🥇' }
+const TIER_LABEL: Record<string, string> = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' }
+
+export async function sendLoyaltyWelcomeEmail(props: LoyaltyWelcomeEmailProps): Promise<EmailResult> {
+  const { to, name, venueName, points, tier, qrCode, memberId, currencySym = '€', thresholds, venueId } = props
   const firstName = name.split(' ')[0]
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'
   const cardUrl = `${appUrl}/loyalty/${memberId}`
@@ -55,37 +168,15 @@ export async function sendLoyaltyWelcomeEmail(props: LoyaltyWelcomeEmailProps) {
     currencySym,
   })
 
-  const from = process.env.EMAIL_FROM || 'onboarding@resend.dev'
-  const subject = `Welcome to ${venueName} Loyalty! You earned ${points} points 🎉`
-
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
-    // Dev stub — log only
-    console.log(`[Email stub] → ${to} | Subject: ${subject}`)
-    return { ok: true, stub: true }
-  }
-
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ from, to, subject, html }),
-    })
-
-    if (!res.ok) {
-      const err = await res.text()
-      console.error('[email] Resend error:', err)
-      return { ok: false, error: err }
-    }
-
-    return { ok: true }
-  } catch (err) {
-    console.error('[email] Send failed:', err)
-    return { ok: false, error: String(err) }
-  }
+  // The demo guard, the stub contract and the Resend call all live in deliver()
+  // so the two mails cannot drift apart — a guard present on one and missing
+  // from the other is how the platform ended up messaging invented guests.
+  return deliver({
+    to,
+    venueId,
+    subject: `Welcome to ${venueName} Loyalty! You earned ${points} points 🎉`,
+    html,
+  })
 }
 
 // ─── HTML Template ────────────────────────────────────────────────────────────
