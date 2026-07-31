@@ -126,11 +126,14 @@ export const TEMPLATES: WorkflowTemplate[] = [
     name: 'Reservation reminder',
     description: 'Remind a guest ahead of their booking.',
     category: 'Reservations',
-    note: 'Reservation events arrive with the reservation module.',
+    note: 'Fires on confirmation, so a guest is never reminded about a table they were never given.',
     build: () => ({
       name: 'Reservation reminder',
-      description: 'Sent before a booking.',
-      triggerEvent: 'reservation.created',
+      description: 'Sent before a confirmed booking.',
+      // Was 'reservation.created' — which fires when the request is captured,
+      // before anyone has accepted it. Reminding a guest about a booking the
+      // venue has not agreed to is worse than not reminding them at all.
+      triggerEvent: 'reservation.confirmed',
       conditions: [],
       actions: [{
         type: 'send_whatsapp',

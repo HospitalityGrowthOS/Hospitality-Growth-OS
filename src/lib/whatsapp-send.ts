@@ -29,7 +29,7 @@ function getAdminClient() {
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export type MessageType = 'loyalty_welcome' | 'review_request' | 'campaign' | 'manual'
+export type MessageType = 'loyalty_welcome' | 'review_request' | 'campaign' | 'manual' | 'reservation_confirmed'
 export type MessageStatus = 'sent' | 'failed' | 'delivered' | 'read'
 
 export interface SendResult {
@@ -239,6 +239,7 @@ export async function sendLoyaltyWelcome(params: {
     status:            result.ok ? 'sent' : 'failed',
     providerMessageId: result.messageId,
     errorMessage:      result.error,
+    stub:              result.stub,
   })
 
   return result
@@ -277,6 +278,52 @@ export async function sendReviewRequest(params: {
     status:            result.ok ? 'sent' : 'failed',
     providerMessageId: result.messageId,
     errorMessage:      result.error,
+    stub:              result.stub,
+  })
+
+  return result
+}
+
+/**
+ * Tells a guest their table is booked.
+ *
+ * Sent free-form rather than as an approved template, because it is a reply
+ * inside a conversation the guest started — they asked for a table, so the
+ * 24-hour service window is open. If a venue later takes bookings from a
+ * channel where that is not true, this needs a template.
+ *
+ * Transactional, so it deliberately ignores marketing opt-out: someone who
+ * asked for a table has asked to be told whether they have one.
+ */
+export async function sendReservationConfirmed(params: {
+  phone: string
+  guestName?: string | null
+  venueName: string
+  date: string
+  time: string
+  partySize: number
+  venueId: string
+  guestId?: string
+}): Promise<SendResult> {
+  const { phone, guestName, venueName, date, time, partySize, venueId, guestId } = params
+  const firstName = guestName?.split(' ')[0] || 'there'
+  const body =
+    `Hi ${firstName}, your table at ${venueName} is confirmed ✅\n\n` +
+    `${date} at ${time} · ${partySize} ${partySize === 1 ? 'guest' : 'guests'}\n\n` +
+    `Reply here if anything changes and we will sort it out.`
+
+  const result = await sendFreeform({ to: phone, body, venueId })
+
+  await logMessage({
+    venueId,
+    guestId,
+    phone,
+    messageType:       'reservation_confirmed',
+    body,
+    status:            result.ok ? 'sent' : 'failed',
+    providerMessageId: result.messageId,
+    errorMessage:      result.error,
+    stub:              result.stub,
   })
 
   return result
@@ -293,7 +340,15 @@ export async function logMessage(params: {
   status: MessageStatus
   providerMessageId?: string
   errorMessage?: string
+  /** True when no message actually left the building. */
+  stub?: boolean
 }) {
+  // A stubbed send is one that did not happen — no credentials, or a demo
+  // venue. Recording it as 'sent' would fill the venue's message log with
+  // messages no guest ever received, which is worse than having no log: the
+  // owner would believe those guests had been contacted.
+  if (params.stub) return
+
   try {
     const supabase = getAdminClient()
     // tryWrite, not a bare await: PostgREST failures resolve with { error }

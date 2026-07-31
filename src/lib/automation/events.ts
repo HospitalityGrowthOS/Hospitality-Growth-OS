@@ -30,6 +30,7 @@ export const KNOWN_EVENTS = [
   'loyalty.points_awarded',
   'visit.recorded',
   'reservation.created',
+  'reservation.confirmed',
   'reservation.cancelled',
   'review.received',
   'review.positive',

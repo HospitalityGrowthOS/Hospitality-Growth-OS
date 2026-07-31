@@ -15,6 +15,9 @@
 
 import { createAdminClient, VENUE, TODAY, addDays, dayKey, iso, inServiceCrisis } from './seed'
 import { isDemoSettings } from '../../src/lib/demo'
+import { TEMPLATES } from '../../src/lib/automation/templates'
+import fs from 'node:fs'
+import path from 'node:path'
 
 let passed = 0
 const failures: string[] = []
@@ -324,6 +327,40 @@ async function main() {
   check('answered requests record when they were handled',
     reservations.filter(r => r.status !== 'pending').every(r => r.handled_at !== null),
     `${reservations.filter(r => r.status === 'pending').length} still awaiting a reply`)
+
+  // ── Automation wiring ────────────────────────────────────────────────────
+  // A template that listens for an event nothing emits is a dead feature: the
+  // venue installs it, activates it, and it never fires. That is exactly what
+  // shipped with the reservation reminder, which waited on `reservation.created`
+  // while nothing in the product emitted it.
+  console.log('\nAutomation wiring')
+  // The three catalogue files are excluded: naming an event in the catalogue,
+  // the trigger list or a template is precisely what does NOT make it real.
+  const CATALOGUES = ['automation/events.ts', 'automation/triggers.ts', 'automation/templates.ts']
+  const srcDir = path.join(__dirname, '..', '..', 'src')
+  const sources: string[] = []
+  const walk = (dir: string) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) walk(full)
+      else if (/\.tsx?$/.test(entry.name) && !CATALOGUES.some(c => full.endsWith(c))) {
+        sources.push(fs.readFileSync(full, 'utf8'))
+      }
+    }
+  }
+  walk(srcDir)
+  const code = sources.join('\n')
+
+  const dead = TEMPLATES
+    .map(tpl => tpl.build().triggerEvent)
+    .filter((event, i, arr) => arr.indexOf(event) === i)
+    // Match the quoted name anywhere outside the catalogues rather than a
+    // `name:` prefix — several emitters choose the event with a ternary.
+    .filter(event => !code.includes(`'${event}'`))
+
+  check('every shipped template triggers on an event the product emits',
+    dead.length === 0,
+    dead.length ? `no emitter for: ${dead.join(', ')}` : `${TEMPLATES.length} templates`)
 
   // ── Outbound safety ──────────────────────────────────────────────────────
   // The demo's guests are invented. If the platform ever messages them it is

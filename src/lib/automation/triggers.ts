@@ -56,6 +56,13 @@ export const TRIGGERS: TriggerDescriptor[] = [
     provides: ['event.party_size', 'event.requested_for'],
   },
   {
+    event: 'reservation.confirmed',
+    label: 'Reservation confirmed',
+    description: 'The venue accepted a booking. The guest has been told.',
+    category: 'Reservations',
+    provides: ['event.party_size', 'event.requested_for'],
+  },
+  {
     event: 'reservation.cancelled',
     label: 'Reservation cancelled',
     description: 'A booking is withdrawn.',
