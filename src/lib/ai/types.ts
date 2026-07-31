@@ -59,7 +59,14 @@ export type AiResult<T> =
   | { ok: true; data: T }
   | { ok: false; reason: AiFailureReason; message: string }
 
-export type AiFailureReason = 'not_configured' | 'provider_error' | 'invalid_response'
+export type AiFailureReason =
+  | 'not_configured'
+  /** Provider was overloaded, rate-limited or unreachable — the same call may work later. */
+  | 'overloaded'
+  /** The call took longer than this feature is allowed to wait. */
+  | 'timeout'
+  | 'provider_error'
+  | 'invalid_response'
 
 export function aiFailure<T>(reason: AiFailureReason, message: string): AiResult<T> {
   return { ok: false, reason, message }

@@ -26,11 +26,55 @@ export const DEFAULT_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5'
 
 let cached: Anthropic | null = null
 
+/**
+ * How long any single call may take, and how hard the SDK tries.
+ *
+ * Both are set explicitly because the inherited defaults are wrong here. The
+ * SDK defaults to a **ten minute** timeout, and most calls in this product sit
+ * inside the WhatsApp webhook: Meta expects a prompt 200 and re-delivers the
+ * message if it does not get one, so a slow model call does not just delay a
+ * reply — it duplicates the guest's message and the answer to it.
+ *
+ * Retries are the SDK's own (connection errors, 408, 409, 429 and every 5xx,
+ * which covers the 529 Overloaded that Anthropic returns under load). Three
+ * attempts inside a 20-second ceiling is the trade: long enough to ride out a
+ * blip, short enough that the webhook still answers while Meta is listening.
+ */
+const CALL_TIMEOUT_MS = 20_000
+const MAX_RETRIES = 3
+
 function getClient(): Anthropic | null {
   const key = apiKey()
   if (!key) return null
-  if (!cached) cached = new Anthropic({ apiKey: key })
+  if (!cached) {
+    cached = new Anthropic({ apiKey: key, maxRetries: MAX_RETRIES, timeout: CALL_TIMEOUT_MS })
+  }
   return cached
+}
+
+/**
+ * Sorts a provider error into something a caller can act on.
+ *
+ * The distinction that matters is transient versus permanent: an overloaded
+ * provider is worth retrying or escalating to a person, a malformed request
+ * never will be, and telling them apart is the difference between a useful
+ * escalation note and "something went wrong".
+ */
+function classify(err: unknown): { reason: 'overloaded' | 'timeout' | 'provider_error'; message: string } {
+  const message = err instanceof Error ? err.message : String(err)
+  const status = (err as { status?: number })?.status
+
+  if (err instanceof Anthropic.APIConnectionTimeoutError) {
+    return { reason: 'timeout', message: `Model call exceeded ${CALL_TIMEOUT_MS / 1000}s` }
+  }
+  if (err instanceof Anthropic.APIConnectionError) {
+    return { reason: 'overloaded', message: `Could not reach the model provider: ${message}` }
+  }
+  // 429 rate limit, 529 overloaded, and any other 5xx — all worth another go.
+  if (status === 429 || (typeof status === 'number' && status >= 500)) {
+    return { reason: 'overloaded', message: `Provider unavailable (${status}) after ${MAX_RETRIES} attempts` }
+  }
+  return { reason: 'provider_error', message }
 }
 
 /** Which product feature made the call — used for the activity breakdown. */
@@ -51,6 +95,8 @@ export interface CallOptions {
   venueId?: string
   /** Set false for high-volume internal calls that would spam the log. */
   log?: boolean
+  /** Override the default ceiling — background jobs can afford to wait longer. */
+  timeoutMs?: number
 }
 
 /**
@@ -75,7 +121,7 @@ export async function callModel(opts: CallOptions): Promise<AiResult<string>> {
       // No temperature: current models reject it as deprecated.
       system: opts.system,
       messages: opts.messages,
-    })
+    }, { timeout: opts.timeoutMs ?? CALL_TIMEOUT_MS })
 
     // Take the first text block rather than content[0]: the model may emit a
     // non-text block (e.g. thinking) ahead of the answer.
@@ -107,8 +153,8 @@ export async function callModel(opts: CallOptions): Promise<AiResult<string>> {
 
     return { ok: true, data: block.text }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    console.error(`[ai] ${opts.feature} failed:`, message)
+    const { reason, message } = classify(err)
+    console.error(`[ai] ${opts.feature} failed (${reason}):`, message)
 
     await logInteraction({
       feature: opts.feature,
@@ -119,7 +165,7 @@ export async function callModel(opts: CallOptions): Promise<AiResult<string>> {
       enabled: opts.log !== false,
     })
 
-    return aiFailure('provider_error', message)
+    return aiFailure(reason, message)
   }
 }
 

@@ -88,6 +88,9 @@ export async function generateBusinessSummary(params: {
     messages: [{ role: 'user', content: `${venueName}\n\n${factsFor(snapshot, period)}` }],
     maxTokens: 400,
     feature: 'business_insight',
+    // Not inside the WhatsApp webhook, so there is no Meta re-delivery clock
+    // to race — this can afford to wait rather than fail the summary.
+    timeoutMs: 60_000,
     venueId,
   })
 
