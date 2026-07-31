@@ -1,3 +1,5 @@
+import { toNextTier, DEFAULT_TIER_THRESHOLDS, type TierThresholds } from '@/lib/tiers'
+import { isDemoVenue, logSuppressed } from '@/lib/demo'
 /**
  * Email utility — Resend REST API.
  * Set RESEND_API_KEY in .env.local to send real emails.
@@ -18,18 +20,32 @@ interface LoyaltyWelcomeEmailProps {
   memberId: string
   /** Venue's currency symbol. Defaults to euro so existing callers keep working. */
   currencySym?: string
+  /** The venue's own thresholds. Without these the mail quoted a hardcoded 500. */
+  thresholds?: TierThresholds
+  /** Pass this. A demo venue's guest addresses look real and may belong to someone. */
+  venueId?: string
 }
 
 const TIER_EMOJI: Record<string, string> = { bronze: '🥉', silver: '🥈', gold: '🥇' }
 const TIER_LABEL: Record<string, string> = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' }
 
 export async function sendLoyaltyWelcomeEmail(props: LoyaltyWelcomeEmailProps) {
-  const { to, name, venueName, points, tier, qrCode, memberId, currencySym = '€' } = props
+  const { to, name, venueName, points, tier, qrCode, memberId, currencySym = '€', thresholds, venueId } = props
+
+  // A demo venue's guests are invented, but their email addresses are ordinary
+  // gmail/videotron-looking strings that may well belong to a real person —
+  // a worse failure mode than the reserved 555 phone numbers beside them.
+  if (await isDemoVenue(venueId)) {
+    logSuppressed('email', venueId!, to)
+    return { ok: true, stub: true }
+  }
   const firstName = name.split(' ')[0]
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001'
   const cardUrl = `${appUrl}/loyalty/${memberId}`
-  const silverThreshold = 500
-  const pointsToSilver = Math.max(0, silverThreshold - points)
+  // Was a hardcoded 500, which contradicted whatever the venue had configured
+  // — the guest was told a target they were not actually measured against.
+  const next = toNextTier(points, thresholds ?? DEFAULT_TIER_THRESHOLDS)
+  const pointsToSilver = next?.remaining ?? 0
 
   // Use hosted QR URL — Gmail blocks base64 data URIs
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&color=1A1510&bgcolor=FFFFFF&qzone=2&data=${encodeURIComponent(cardUrl)}`

@@ -12,6 +12,7 @@ import type { Database } from '@/types/database'
 import { mustWrite } from '@/lib/db'
 import { emitEvent } from '@/lib/automation'
 import { currencySymbol } from '@/lib/money'
+import { tierThresholds, toNextTier } from '@/lib/tiers'
 import { sendLoyaltyWelcomeEmail } from '@/lib/email'
 import { sendLoyaltyWelcome as sendLoyaltyWelcomeWhatsApp } from '@/lib/whatsapp-send'
 
@@ -78,8 +79,11 @@ export async function POST(
         .single()
 
       if (existingMember) {
-        const settings = venue.settings as Record<string, unknown>
-        const silverThreshold = (settings?.silver_threshold as number) || 500
+        // Thresholds come from the venue's own settings. This branch used to
+        // read `silver_threshold` while the awarding code read
+        // `tier_thresholds`, so the target shown to the guest could differ
+        // from the one they were actually measured against.
+        const next = toNextTier(existingMember.points_balance, tierThresholds(venue.settings))
         return NextResponse.json({
           status: 'already_enrolled',
           member: {
@@ -90,9 +94,9 @@ export async function POST(
             qr_code:            existingMember.qr_code,
             venue_name:         venue.name,
             enrolled_at:        existingMember.enrolled_at,
-            points_to_next_tier: Math.max(0, silverThreshold - existingMember.points_balance),
-            next_tier:          'silver',
-            next_tier_threshold: silverThreshold,
+            points_to_next_tier: next?.remaining ?? 0,
+            next_tier:          next?.tier ?? null,
+            next_tier_threshold: next?.threshold ?? null,
           },
         })
       }
@@ -198,6 +202,8 @@ export async function POST(
         qrCode,
         memberId:  member.id,
         currencySym: currencySymbol(venue.settings),
+        thresholds:  tierThresholds(venue.settings),
+        venueId,
       }).catch(err => console.error('[signup] Email error:', err))
     }
 
@@ -229,8 +235,7 @@ export async function POST(
       }).catch(() => {})
     }
 
-    const settings = venue.settings as Record<string, unknown>
-    const silverThreshold = (settings?.silver_threshold as number) || 500
+    const next = toNextTier(WELCOME_POINTS, tierThresholds(venue.settings))
 
     return NextResponse.json({
       status: 'enrolled',
@@ -244,9 +249,9 @@ export async function POST(
         qr_code:             member.qr_code,
         venue_name:          venue.name,
         enrolled_at:         member.enrolled_at,
-        points_to_next_tier: silverThreshold - WELCOME_POINTS,
-        next_tier:           'silver',
-        next_tier_threshold: silverThreshold,
+        points_to_next_tier: next?.remaining ?? 0,
+        next_tier:           next?.tier ?? null,
+        next_tier_threshold: next?.threshold ?? null,
       },
     }, { status: 201 })
 

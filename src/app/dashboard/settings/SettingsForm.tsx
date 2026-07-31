@@ -13,7 +13,8 @@ export interface VenueSettingsValues {
   google_review_url: string
   ai_persona_name: string
   review_delay_minutes: number
-  points_per_euro: number
+  points_per_unit: number
+  tier_thresholds: { silver: number; gold: number }
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -120,10 +121,37 @@ export default function SettingsForm({ initial, currencySym = '€' }: { initial
             <Input
               type="number"
               min={0}
-              value={values.points_per_euro}
-              onChange={e => set('points_per_euro', Number(e.target.value))}
+              value={values.points_per_unit}
+              onChange={e => set('points_per_unit', Number(e.target.value))}
               className="w-28"
             />
+          </Field>
+          <Field
+            label="Tier thresholds"
+            hint={`Points needed to reach each tier. At ${values.points_per_unit} points per ${currencySym}1, a ${currencySym}${Math.round(values.tier_thresholds.silver / Math.max(1, values.points_per_unit))} spend reaches Silver and ${currencySym}${Math.round(values.tier_thresholds.gold / Math.max(1, values.points_per_unit))} reaches Gold.`}
+          >
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-[13px] text-mid">
+                <span className="w-12">Silver</span>
+                <Input
+                  type="number"
+                  min={1}
+                  value={values.tier_thresholds.silver}
+                  onChange={e => set('tier_thresholds', { ...values.tier_thresholds, silver: Number(e.target.value) })}
+                  className="w-28"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-[13px] text-mid">
+                <span className="w-10">Gold</span>
+                <Input
+                  type="number"
+                  min={1}
+                  value={values.tier_thresholds.gold}
+                  onChange={e => set('tier_thresholds', { ...values.tier_thresholds, gold: Number(e.target.value) })}
+                  className="w-28"
+                />
+              </label>
+            </div>
           </Field>
           <Field label="AI assistant name" hint="The name your assistant uses when replying to guests on WhatsApp.">
             <Input

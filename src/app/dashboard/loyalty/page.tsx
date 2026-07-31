@@ -8,6 +8,7 @@ import Link from 'next/link'
 import IssuePointsModal from './IssuePointsModal'
 import type { LoyaltyMember } from '@/types/database'
 import { currencySymbol } from '@/lib/money'
+import { pointsPerUnit } from '@/lib/tiers'
 
 type MemberWithGuest = LoyaltyMember & {
   guests: { name: string | null; phone: string | null; total_visits: number; total_spent: number } | null
@@ -83,7 +84,7 @@ export default async function LoyaltyPage() {
   const totalPointsIssued = memberList.reduce((a, m) => a + (m.points_earned_total || 0), 0)
   const avgPoints = (totalCount ?? 0) > 0 ? Math.round(totalPointsIssued / (totalCount ?? 1)) : 0
   const settings = venue.settings as Record<string, unknown>
-  const pointsPerEuro = (settings?.points_per_euro as number) || 10
+  const pointsPerEuro = pointsPerUnit(settings)
 
   // Shape data for IssuePointsModal (client component needs plain data)
   const modalMembers = memberList.map(m => ({

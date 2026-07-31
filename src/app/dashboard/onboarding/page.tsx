@@ -62,7 +62,7 @@ export default async function OnboardingPage() {
     {
       title: 'Set your loyalty rules',
       desc: 'Points per euro, tier thresholds and how long to wait before asking for a review.',
-      done: settings.points_per_euro != null,
+      done: settings.points_per_unit != null || settings.points_per_euro != null,
       required: true,
       cta: 'Open settings',
       href: '/dashboard/settings',

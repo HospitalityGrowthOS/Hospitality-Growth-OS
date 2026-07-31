@@ -32,13 +32,19 @@ export function generateQRCode(venueSlug: string): string {
   return `HGOS-${venueSlug.toUpperCase().substring(0, 4)}-${random}`
 }
 
+/**
+ * @deprecated Prefer `tierFor(points, tierThresholds(venue.settings))` from
+ * `@/lib/tiers` — it reads the venue's own configuration. This wrapper exists
+ * so older call sites keep working, and now defaults to the shared thresholds
+ * rather than a second hardcoded copy of them.
+ */
+import { tierFor, DEFAULT_TIER_THRESHOLDS, type Tier, type TierThresholds } from '@/lib/tiers'
+
 export function calcLoyaltyTier(
   points: number,
-  thresholds = { silver: 500, gold: 1500 }
-): 'bronze' | 'silver' | 'gold' {
-  if (points >= thresholds.gold) return 'gold'
-  if (points >= thresholds.silver) return 'silver'
-  return 'bronze'
+  thresholds: TierThresholds = DEFAULT_TIER_THRESHOLDS
+): Tier {
+  return tierFor(points, thresholds)
 }
 
 export function getTierEmoji(tier: string): string {

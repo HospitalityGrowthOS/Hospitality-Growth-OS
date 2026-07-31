@@ -16,7 +16,23 @@ const SettingsSchema = z.object({
   google_review_url: z.string().url().or(z.literal('')).optional(),
   ai_persona_name:   z.string().max(60).optional(),
   review_delay_minutes: z.number().int().min(5).max(1440).optional(),
+  /** Points per unit of the venue's currency. `points_per_euro` was the
+   *  original name and is still accepted from older clients. */
+  points_per_unit:   z.number().min(0).max(1000).optional(),
   points_per_euro:   z.number().min(0).max(1000).optional(),
+
+  /**
+   * Loyalty tier thresholds, in points. Previously absent from this schema
+   * entirely, which meant tiers could not be changed through the product at
+   * all — every venue ran on the hardcoded defaults regardless of its average
+   * bill, and most members landed in the top tier on their first visit.
+   */
+  tier_thresholds: z.object({
+    silver: z.number().int().min(1).max(1_000_000),
+    gold:   z.number().int().min(1).max(1_000_000),
+  }).refine(t => t.gold > t.silver, {
+    message: 'The Gold threshold must be higher than Silver',
+  }).optional(),
 
   /** Knowledge Base entries, keyed by FAQ topic. Empty string clears a topic. */
   faq: z.record(z.enum(FAQ_TOPICS), z.string().max(2000)).optional(),
@@ -67,6 +83,12 @@ export async function PATCH(req: NextRequest) {
 
   for (const [key, value] of Object.entries(scalarFields)) {
     if (value !== undefined) settings[key] = value as Json
+  }
+
+  // Normalise onto the new key so a venue does not end up carrying both.
+  if (settings.points_per_euro !== undefined) {
+    if (settings.points_per_unit === undefined) settings.points_per_unit = settings.points_per_euro
+    delete settings.points_per_euro
   }
 
   if (faq) settings.faq = mergeBlob(current.faq, faq)

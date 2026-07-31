@@ -6,6 +6,7 @@ import Topbar from '@/components/layout/Topbar'
 import { Card, CardBody } from '@/components/ui/Card'
 import SettingsForm, { type VenueSettingsValues } from './SettingsForm'
 import { currencySymbol } from '@/lib/money'
+import { tierThresholds, pointsPerUnit } from '@/lib/tiers'
 
 export default async function SettingsPage() {
   const venue = await getCurrentVenue()
@@ -30,7 +31,8 @@ export default async function SettingsPage() {
     google_review_url:    (settings.google_review_url as string) || '',
     ai_persona_name:      (settings.ai_persona_name as string) || 'Sofia',
     review_delay_minutes: (settings.review_delay_minutes as number) ?? 45,
-    points_per_euro:      (settings.points_per_euro as number) ?? 10,
+    points_per_unit:      pointsPerUnit(settings),
+    tier_thresholds:      tierThresholds(settings),
   }
 
   const whatsappConnected = Boolean(venue.whatsapp_phone_number_id && venue.whatsapp_access_token)

@@ -14,7 +14,8 @@ import { formatMoney } from '@/lib/money'
 // points. Going through it would make loyalty ⇄ automation a static cycle.
 import { emitEvent } from '@/lib/automation/events'
 import { sendText } from '@/lib/whatsapp'
-import { calcLoyaltyTier, getTierEmoji } from '@/lib/utils'
+import { getTierEmoji } from '@/lib/utils'
+import { tierFor, tierThresholds, pointsPerUnit } from '@/lib/tiers'
 
 export interface AwardPointsResult {
   ok: boolean
@@ -47,18 +48,13 @@ export async function awardPoints(params: {
   if (!member) return { ok: false, error: 'Member not found' }
   if (!venue)  return { ok: false, error: 'Venue not found' }
 
-  const settings = (venue.settings || {}) as Record<string, unknown>
-  const pointsPerEuro = (settings.points_per_euro as number) ?? 10
-  const thresholds =
-    (settings.tier_thresholds as { silver: number; gold: number }) ??
-    { silver: 500, gold: 1500 }
-
-  const pointsEarned = Math.floor(spendAmount * pointsPerEuro)
+  const thresholds = tierThresholds(venue.settings)
+  const pointsEarned = Math.floor(spendAmount * pointsPerUnit(venue.settings))
   if (pointsEarned <= 0) return { ok: true, points_earned: 0 }
 
   const newBalance  = member.points_balance + pointsEarned
   const oldTier     = member.tier as string
-  const newTier     = calcLoyaltyTier(newBalance, thresholds)
+  const newTier     = tierFor(newBalance, thresholds)
   const tierUpgraded = newTier !== oldTier
 
   // The `after_loyalty_transaction_insert` trigger owns points_balance,
@@ -104,7 +100,8 @@ export async function awardPoints(params: {
         venue.whatsapp_phone_number_id,
         venue.whatsapp_access_token,
         guest.phone,
-        message
+        message,
+        venueId
       )
     } catch (err) {
       console.error('[loyalty] points notification failed (non-fatal):', err)

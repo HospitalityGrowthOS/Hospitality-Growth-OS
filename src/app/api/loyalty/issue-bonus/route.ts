@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { mustWrite } from '@/lib/db'
-import { calcLoyaltyTier } from '@/lib/utils'
+import { tierFor, tierThresholds } from '@/lib/tiers'
 
 const schema = z.object({
   member_id: z.string().uuid(),
@@ -31,8 +31,14 @@ export async function POST(req: NextRequest) {
 
     if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
 
+    // Thresholds come from the venue, not a default. Awarding a bonus used to
+    // re-tier the member against hardcoded numbers, so a manual bonus could
+    // silently contradict the tier the venue's own settings called for.
+    const { data: bonusVenue } = await admin
+      .from('venues').select('settings').eq('id', body.venue_id).single()
+
     const newBalance = member.points_balance + body.points
-    const newTier    = calcLoyaltyTier(newBalance)
+    const newTier    = tierFor(newBalance, tierThresholds(bonusVenue?.settings))
     const now        = new Date().toISOString()
 
     // The ledger row goes in first; its trigger sets points_balance,
