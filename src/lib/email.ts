@@ -30,6 +30,8 @@ export interface EmailResult {
   ok: boolean
   /** True when nothing left the building — no API key, or a demo venue. */
   stub?: boolean
+  /** Provider message id. Without it a send cannot be traced past acceptance. */
+  id?: string
   error?: string
 }
 
@@ -73,7 +75,10 @@ async function deliver(params: {
       console.error('[email] Resend error:', err)
       return { ok: false, error: err }
     }
-    return { ok: true }
+    // Accepted is not delivered. Keeping the id is the only way to answer
+    // "did it actually arrive?" later — the provider knows, we did not ask.
+    const body = await res.json().catch(() => ({}))
+    return { ok: true, id: (body as { id?: string }).id }
   } catch (err) {
     console.error('[email] Send failed:', err)
     return { ok: false, error: String(err) }
