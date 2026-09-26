@@ -1,6 +1,22 @@
+/**
+ * Manual loyalty bonus.
+ * POST /api/loyalty/issue-bonus
+ *
+ * The route took `venue_id` from the request body, scoped the *member* lookup
+ * to it, and never asked whether the *caller* had anything to do with that
+ * venue. Any signed-in account could award up to 10,000 points at any venue,
+ * given a member id and a venue id — both of which are public.
+ *
+ *   1. the caller must own the venue they name  (`ownsVenue`)
+ *   2. the member must belong to that same venue (the `.eq('venue_id', …)` below)
+ *
+ * Both refusals return the same 404, matching `api/venues/select`, so the
+ * endpoint does not confirm which venue ids exist.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { ownsVenue } from '@/lib/venue'
 import { mustWrite } from '@/lib/db'
 import { tierFor, tierThresholds } from '@/lib/tiers'
 
@@ -19,9 +35,18 @@ export async function POST(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const body = schema.parse(await req.json())
+
+    // Check 1 — the caller operates this venue. Before any lookup, before any
+    // write. A signed-in stranger gets no further than this line.
+    if (!(await ownsVenue(body.venue_id))) {
+      return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+    }
+
     const admin = await createAdminClient()
 
-    // Fetch member (scoped to this venue for safety)
+    // Check 2 — the member belongs to the venue the caller just proved they
+    // operate. On its own this was never authorisation: it only established
+    // that the member and the supplied venue agreed with each other.
     const { data: member } = await admin
       .from('loyalty_members')
       .select('*')
